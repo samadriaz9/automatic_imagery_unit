@@ -268,7 +268,8 @@ try:
     x = input ('Enter to start camera: ')
     Camera_home()
 
-
+    x = input ('Enter to start incubator lid: ')
+    incubator_lid_home()
 
 
 
