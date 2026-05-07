@@ -10,8 +10,8 @@ Pin mapping (BCM):
 import time
 import RPi.GPIO as GPIO
 
-DIR_PIN = 27
-STEP_PIN = 22
+DIR_PIN   = 27   # CW+
+STEP_PIN  = 22   # CLK+
 LIMIT_PIN = 13
 
 STEP_DELAY = 0.001

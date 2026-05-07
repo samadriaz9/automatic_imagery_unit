@@ -3,9 +3,9 @@ import time
 
 # Camera motor pins (BCM numbering)
 
-DIR_PIN   = 27   # CW+
-STEP_PIN  = 22   # CLK+
-LIMIT_PIN = 13
+DIR_PIN   = 17
+STEP_PIN  = 18
+LIMIT_PIN = 6
 
 delay = 0.001   # speed control
 
