@@ -993,15 +993,16 @@ class ExperimentApp:
                 current = 1
             run_count_var.set(max(1, min(5, current + delta)))
 
-        tk.Button(
+        _make_rounded_button(
             count_slot,
-            text="-",
-            command=lambda: _adjust_run_count(-1),
-            width=3,
-            height=2,
-            bg="#D9E2F2",
-            activebackground="#C8D6EE",
-            font=("TkDefaultFont", 14, "bold"),
+            "-",
+            lambda: _adjust_run_count(-1),
+            width=52,
+            height=52,
+            radius=16,
+            bg_rgb=(217, 226, 242),
+            font_size=24,
+            parent_bg="#CFD9EA",
         ).pack(side=tk.LEFT, padx=(0, 6))
         tk.Entry(
             count_slot,
@@ -1012,15 +1013,16 @@ class ExperimentApp:
             font=("TkDefaultFont", 14, "bold"),
             readonlybackground="#FFFFFF",
         ).pack(side=tk.LEFT, ipady=10)
-        tk.Button(
+        _make_rounded_button(
             count_slot,
-            text="+",
-            command=lambda: _adjust_run_count(1),
-            width=3,
-            height=2,
-            bg="#D9E2F2",
-            activebackground="#C8D6EE",
-            font=("TkDefaultFont", 14, "bold"),
+            "+",
+            lambda: _adjust_run_count(1),
+            width=52,
+            height=52,
+            radius=16,
+            bg_rgb=(217, 226, 242),
+            font_size=24,
+            parent_bg="#CFD9EA",
         ).pack(side=tk.LEFT, padx=(6, 0))
 
         tk.Label(
@@ -1122,15 +1124,16 @@ class ExperimentApp:
         def _make_delay_slot(row_idx, var, top_pad=6):
             slot = tk.Frame(left_panel, bg="#CFD9EA")
             slot.grid(row=row_idx, column=1, sticky="e", padx=(4, 12), pady=(top_pad, 6))
-            tk.Button(
+            _make_rounded_button(
                 slot,
-                text="-",
-                command=lambda v=var: _adjust_delay_slot(run_delay_vars.index(v), -1.0),
-                width=3,
-                height=2,
-                bg="#D9E2F2",
-                activebackground="#C8D6EE",
-                font=("TkDefaultFont", 14, "bold"),
+                "-",
+                lambda v=var: _adjust_delay_slot(run_delay_vars.index(v), -1.0),
+                width=48,
+                height=48,
+                radius=14,
+                bg_rgb=(217, 226, 242),
+                font_size=22,
+                parent_bg="#CFD9EA",
             ).pack(side=tk.LEFT, padx=(0, 4))
             tk.Entry(
                 slot,
@@ -1141,15 +1144,16 @@ class ExperimentApp:
                 font=("TkDefaultFont", 14, "bold"),
                 readonlybackground="#FFFFFF",
             ).pack(side=tk.LEFT, ipady=10)
-            tk.Button(
+            _make_rounded_button(
                 slot,
-                text="+",
-                command=lambda v=var: _adjust_delay_slot(run_delay_vars.index(v), 1.0),
-                width=3,
-                height=2,
-                bg="#D9E2F2",
-                activebackground="#C8D6EE",
-                font=("TkDefaultFont", 14, "bold"),
+                "+",
+                lambda v=var: _adjust_delay_slot(run_delay_vars.index(v), 1.0),
+                width=48,
+                height=48,
+                radius=14,
+                bg_rgb=(217, 226, 242),
+                font_size=22,
+                parent_bg="#CFD9EA",
             ).pack(side=tk.LEFT, padx=(4, 0))
 
         def _validate_run_slots(enabled_runs):
@@ -1220,15 +1224,16 @@ class ExperimentApp:
                     value = max(float(min_v), min(float(max_v), value + delta))
                     var.set(f"{value:.{precision}f}" if precision > 0 else f"{int(round(value))}")
 
-                minus_btn = tk.Button(
+                minus_btn = _make_rounded_button(
                     box,
-                    text="-",
-                    width=3,
-                    bg="#D85151",
-                    fg="white",
-                    activebackground="#C44141",
-                    font=("TkDefaultFont", 13, "bold"),
-                    command=lambda: _adjust(-step),
+                    "-",
+                    lambda: _adjust(-step),
+                    width=44,
+                    height=44,
+                    radius=14,
+                    bg_rgb=(216, 81, 81),
+                    font_size=20,
+                    parent_bg="#E9EEF7",
                 )
                 minus_btn.grid(row=0, column=0, padx=(0, 6))
 
@@ -1244,15 +1249,16 @@ class ExperimentApp:
                 )
                 value_lbl.grid(row=0, column=1, sticky="ew")
 
-                plus_btn = tk.Button(
+                plus_btn = _make_rounded_button(
                     box,
-                    text="+",
-                    width=3,
-                    bg="#1C8E56",
-                    fg="white",
-                    activebackground="#187A4A",
-                    font=("TkDefaultFont", 13, "bold"),
-                    command=lambda: _adjust(step),
+                    "+",
+                    lambda: _adjust(step),
+                    width=44,
+                    height=44,
+                    radius=14,
+                    bg_rgb=(28, 142, 86),
+                    font_size=20,
+                    parent_bg="#E9EEF7",
                 )
                 plus_btn.grid(row=0, column=2, padx=(6, 0))
                 return box
@@ -1835,15 +1841,16 @@ class ExperimentApp:
                 value = max(float(min_v), min(float(max_v), value + delta))
                 var.set(f"{value:.{precision}f}" if precision > 0 else f"{int(round(value))}")
 
-            minus_btn = tk.Button(
+            minus_btn = _make_rounded_button(
                 box,
-                text="-",
-                width=3,
-                bg="#D85151",
-                fg="white",
-                activebackground="#C44141",
-                font=("TkDefaultFont", 13, "bold"),
-                command=lambda: _adjust(-step),
+                "-",
+                lambda: _adjust(-step),
+                width=44,
+                height=44,
+                radius=14,
+                bg_rgb=(216, 81, 81),
+                font_size=20,
+                parent_bg="#E9EEF7",
             )
             minus_btn.grid(row=0, column=0, padx=(0, 6))
 
@@ -1859,15 +1866,16 @@ class ExperimentApp:
             )
             value_lbl.grid(row=0, column=1, sticky="ew")
 
-            plus_btn = tk.Button(
+            plus_btn = _make_rounded_button(
                 box,
-                text="+",
-                width=3,
-                bg="#1C8E56",
-                fg="white",
-                activebackground="#187A4A",
-                font=("TkDefaultFont", 13, "bold"),
-                command=lambda: _adjust(step),
+                "+",
+                lambda: _adjust(step),
+                width=44,
+                height=44,
+                radius=14,
+                bg_rgb=(28, 142, 86),
+                font_size=20,
+                parent_bg="#E9EEF7",
             )
             plus_btn.grid(row=0, column=2, padx=(6, 0))
             return box
