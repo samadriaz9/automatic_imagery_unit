@@ -241,10 +241,10 @@ def _bootstrap_gpio():
         pass
 
 
-def pulse_camera_relay(seconds=3.0, active_state=None):
+def pulse_camera_relay(seconds=4.0, active_state=None):
     """
     Pulse camera relay GPIO for camera power toggle.
-    Camera power toggles when relay is ON for ~3 seconds.
+    Camera power toggles when relay is ON for ~4 seconds.
     """
     _bootstrap_gpio()
     on_state = CAMERA_RELAY_ACTIVE if active_state is None else active_state
@@ -330,6 +330,37 @@ def open_usb_camera(device_index=0):
     return cap
 
 
+def fit_window_to_screen(
+    win,
+    width_ratio=0.9,
+    height_ratio=0.85,
+    min_w=360,
+    min_h=220,
+    max_w=None,
+    max_h=None,
+    center=True,
+):
+    """Size a window relative to current screen without forcing fixed resolution."""
+    try:
+        sw = max(320, int(win.winfo_screenwidth()))
+        sh = max(240, int(win.winfo_screenheight()))
+        target_w = int(sw * float(width_ratio))
+        target_h = int(sh * float(height_ratio))
+        if max_w is not None:
+            target_w = min(target_w, int(max_w))
+        if max_h is not None:
+            target_h = min(target_h, int(max_h))
+        w = min(sw, max(int(min_w), target_w))
+        h = min(sh, max(int(min_h), target_h))
+        x = max(0, (sw - w) // 2) if center else 0
+        y = max(0, (sh - h) // 2) if center else 0
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(min(int(min_w), w), min(int(min_h), h))
+        win.maxsize(sw, sh)
+    except Exception:
+        pass
+
+
 def open_usb_camera_with_recovery(
     device_index=0,
     direct_tries=3,
@@ -344,7 +375,7 @@ def open_usb_camera_with_recovery(
     """
     # Required behavior: on camera open request, pulse relay for 3 s,
     # then return relay to OFF/original state.
-    pulse_camera_relay(3, active_state=CAMERA_RELAY_ACTIVE)
+    pulse_camera_relay(4, active_state=CAMERA_RELAY_ACTIVE)
     time.sleep(float(post_relay_wait_s))
     for _ in range(max(1, int(post_relay_tries))):
         cap = open_usb_camera(device_index)
@@ -354,7 +385,7 @@ def open_usb_camera_with_recovery(
 
     # One more deterministic pulse+retry.
     camera_relay_force_off()
-    pulse_camera_relay(3, active_state=CAMERA_RELAY_ACTIVE)
+    pulse_camera_relay(4, active_state=CAMERA_RELAY_ACTIVE)
     time.sleep(float(post_relay_wait_s))
     for _ in range(max(1, int(post_relay_tries))):
         cap = open_usb_camera(device_index)
@@ -376,8 +407,15 @@ class CameraTestWindow:
         except Exception:
             pass
         self.win.title("USB Camera Test")
-        self.win.geometry("1028x600")
-        self.win.minsize(900, 520)
+        fit_window_to_screen(
+            self.win,
+            width_ratio=0.94,
+            height_ratio=0.92,
+            min_w=560,
+            min_h=360,
+            max_w=1200,
+            max_h=760,
+        )
         self.win.protocol("WM_DELETE_WINDOW", self.on_close)
         self._on_close_cb = on_close
 
@@ -448,8 +486,8 @@ class CameraTestWindow:
         if ok and frame is not None:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w = rgb.shape[:2]
-            max_w = max(920, self.win.winfo_width() - 36)
-            max_h = max(500, self.win.winfo_height() - 175)
+            max_w = max(220, self.win.winfo_width() - 36)
+            max_h = max(160, self.win.winfo_height() - 175)
             scale = min(float(max_w) / float(w), float(max_h) / float(h))
             if scale < 1.0:
                 rgb = cv2.resize(rgb, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
@@ -482,7 +520,7 @@ class CameraTestWindow:
 
         def _relay_worker():
             try:
-                pulse_camera_relay(3)
+                pulse_camera_relay(4)
             finally:
                 self.win.after(0, self._after_relay_close)
 
@@ -513,12 +551,12 @@ class ExperimentApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Automation Device Controller")
-        self.root.minsize(960, 560)
+        sw = max(640, int(self.root.winfo_screenwidth()))
+        sh = max(480, int(self.root.winfo_screenheight()))
+        self.root.minsize(min(760, sw), min(440, sh))
+        self.root.maxsize(sw, sh)
         self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
-        try:
-            self.root.attributes("-fullscreen", True)
-        except Exception:
-            self.root.geometry(self._initial_geometry())
+        self.root.geometry(self._initial_geometry())
         self._setup_styles()
         self._app_icon_photo = None
         self._title_icon_photo = None
@@ -623,26 +661,24 @@ class ExperimentApp:
         action_card.grid(row=2, column=0, sticky="ew", pady=(8, 10))
         action_card.columnconfigure(0, weight=1)
         action_card.columnconfigure(1, weight=1)
-        action_card.columnconfigure(2, weight=1)
         ttk.Label(action_card, text="Main Actions", style="CardTitle.TLabel").grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
         )
 
         btn_row = ttk.Frame(action_card, style="Card.TFrame")
-        btn_row.grid(row=1, column=0, columnspan=3, sticky="ew")
+        btn_row.grid(row=1, column=0, columnspan=2, sticky="ew")
         btn_row.columnconfigure(0, weight=1)
         btn_row.columnconfigure(1, weight=1)
-        btn_row.columnconfigure(2, weight=1)
 
-        bw, bh, br = 380, 134, 31
+        sw = max(640, int(self.root.winfo_screenwidth()))
+        bw = max(280, min(576, int((sw - 120) / 2)))
+        bh = 122 if sw < 1024 else 134
+        br = 31
         ph_steps = _rounded_button_photo(
             bw, bh, br, (22, 98, 212), "Run Experiment", font_size=26
         )
         ph_cam = _rounded_button_photo(
             bw, bh, br, (212, 106, 9), "Test Camera", font_size=26
-        )
-        ph_take = _rounded_button_photo(
-            bw, bh, br, (12, 158, 94), "Take Images", font_size=26
         )
 
         self.btn_step = tk.Button(
@@ -669,20 +705,7 @@ class ExperimentApp:
             activebackground="#F3F6FB",
         )
         self.btn_camera.image = ph_cam
-        self.btn_camera.grid(row=0, column=1, sticky="ew", padx=8)
-
-        self.btn_take_images = tk.Button(
-            btn_row,
-            image=ph_take,
-            command=self.open_take_images,
-            borderwidth=0,
-            highlightthickness=0,
-            cursor="hand2",
-            bg="#F3F6FB",
-            activebackground="#F3F6FB",
-        )
-        self.btn_take_images.image = ph_take
-        self.btn_take_images.grid(row=0, column=2, sticky="ew", padx=(8, 0))
+        self.btn_camera.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
         self.status_var = tk.StringVar(value="Ready.")
         status_card = ttk.Frame(outer, style="StatusCard.TFrame", padding=(10, 8))
@@ -827,18 +850,16 @@ class ExperimentApp:
                 time.sleep(0.25)
 
     def _initial_geometry(self):
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
-        w = min(sw, 1028)
-        h = min(sh, 600)
+        sw = max(320, int(self.root.winfo_screenwidth()))
+        sh = max(240, int(self.root.winfo_screenheight()))
+        w = min(sw, max(560, int(sw * 0.96)))
+        h = min(sh, max(360, int(sh * 0.94)))
         x = max(0, (sw - w) // 2)
         y = max(0, (sh - h) // 2)
         return f"{w}x{h}+{x}+{y}"
 
     def _enforce_fullscreen(self, win):
-        """Force a toplevel to occupy full screen reliably across WMs."""
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
+        """Fit a toplevel inside current screen without forced fullscreen."""
 
         def _apply_once():
             try:
@@ -846,18 +867,13 @@ class ExperimentApp:
                     return
             except Exception:
                 return
-            try:
-                win.geometry(f"{sw}x{sh}+0+0")
-            except Exception:
-                pass
-            try:
-                win.attributes("-fullscreen", True)
-            except Exception:
-                pass
-            try:
-                win.state("zoomed")
-            except Exception:
-                pass
+            fit_window_to_screen(
+                win,
+                width_ratio=0.96,
+                height_ratio=0.94,
+                min_w=560,
+                min_h=360,
+            )
             try:
                 win.lift()
                 win.focus_force()
@@ -874,7 +890,6 @@ class ExperimentApp:
         state = tk.DISABLED if busy else tk.NORMAL
         self.btn_step.config(state=state)
         self.btn_camera.config(state=state)
-        self.btn_take_images.config(state=state)
         self.status_var.set(status_text)
 
     def write_log(self, text):
@@ -904,10 +919,8 @@ class ExperimentApp:
         self._run_experiment_popup = popup
         self._apply_app_icon(popup)
         popup.title("Run Experiment")
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
+        sw = max(320, int(self.root.winfo_screenwidth()))
         self._enforce_fullscreen(popup)
-        popup.minsize(min(800, sw), min(480, sh))
 
         outer = tk.Frame(popup, bg="#E9EEF7")
         outer.pack(fill=tk.BOTH, expand=True)
@@ -1165,8 +1178,15 @@ class ExperimentApp:
             prof_popup = tk.Toplevel(popup)
             self._apply_app_icon(prof_popup)
             prof_popup.title(f"Run {run_id} Profile Setup")
-            prof_popup.geometry("1020x620")
-            prof_popup.minsize(920, 560)
+            fit_window_to_screen(
+                prof_popup,
+                width_ratio=0.9,
+                height_ratio=0.86,
+                min_w=560,
+                min_h=360,
+                max_w=1180,
+                max_h=820,
+            )
             prof_popup.transient(popup)
 
             frame = ttk.Frame(prof_popup, padding=12, style="App.TFrame")
@@ -1780,8 +1800,15 @@ class ExperimentApp:
         popup = tk.Toplevel(self.root)
         self._apply_app_icon(popup)
         popup.title("Incubation Profile Setup")
-        popup.geometry("980x560")
-        popup.minsize(900, 520)
+        fit_window_to_screen(
+            popup,
+            width_ratio=0.9,
+            height_ratio=0.84,
+            min_w=560,
+            min_h=360,
+            max_w=1160,
+            max_h=780,
+        )
         popup.transient(self.root)
 
         frame = ttk.Frame(popup, padding=12, style="App.TFrame")
@@ -2016,8 +2043,15 @@ class ExperimentApp:
         popup = tk.Toplevel(self.root)
         self._apply_app_icon(popup)
         popup.title("Confirm Camera Test")
-        popup.geometry("520x220")
-        popup.minsize(500, 200)
+        fit_window_to_screen(
+            popup,
+            width_ratio=0.5,
+            height_ratio=0.32,
+            min_w=360,
+            min_h=200,
+            max_w=640,
+            max_h=300,
+        )
         popup.transient(self.root)
         popup.grab_set()
 
@@ -2051,8 +2085,15 @@ class ExperimentApp:
         popup = tk.Toplevel(self.root)
         self._apply_app_icon(popup)
         popup.title("Loading Camera")
-        popup.geometry("520x220")
-        popup.minsize(500, 200)
+        fit_window_to_screen(
+            popup,
+            width_ratio=0.5,
+            height_ratio=0.32,
+            min_w=360,
+            min_h=200,
+            max_w=640,
+            max_h=300,
+        )
         popup.transient(self.root)
         popup.grab_set()
 
@@ -2090,8 +2131,15 @@ class ExperimentApp:
         popup = tk.Toplevel(self.root)
         self._apply_app_icon(popup)
         popup.title("Closing Camera")
-        popup.geometry("520x200")
-        popup.minsize(480, 180)
+        fit_window_to_screen(
+            popup,
+            width_ratio=0.5,
+            height_ratio=0.30,
+            min_w=360,
+            min_h=180,
+            max_w=640,
+            max_h=300,
+        )
         popup.transient(self.root)
         popup.grab_set()
 
@@ -2106,7 +2154,7 @@ class ExperimentApp:
         ).pack(anchor="w", pady=(2, 0))
         tk.Label(
             frame,
-            text="via relay (about 3 seconds)...",
+            text="via relay (about 4 seconds)...",
             bg="#F7FAFF",
             fg="#1D3557",
             font=("TkDefaultFont", 16, "bold"),
@@ -2178,22 +2226,6 @@ class ExperimentApp:
         self._camera_test_active = False
         self._camera_test_done_once = True
         self.btn_camera.config(state=tk.NORMAL)
-
-    def open_take_images(self):
-        if self.is_busy or self._camera_test_active:
-            return
-        self.set_busy(True, "Running image capture module...")
-        worker = threading.Thread(target=self._take_images_worker, daemon=True)
-        worker.start()
-
-    def _take_images_worker(self):
-        try:
-            self.write_log("Take Images: preparing imaging sequence")
-            self.step_13()
-            self.root.after(0, lambda: self.set_busy(False, "Ready. Image capture completed."))
-        except Exception as exc:
-            self.write_log(f"Take Images ERROR: {exc}")
-            self.root.after(0, lambda: self.set_busy(False, "Error occurred in Take Images module."))
 
     # ---------- 15 experiment steps ----------
     def step_1(self):
@@ -2369,8 +2401,15 @@ class ExperimentApp:
         win = tk.Toplevel(parent_win)
         self._apply_app_icon(win)
         win.title(f"{stage_name} Monitor")
-        win.geometry("900x520")
-        win.minsize(860, 480)
+        fit_window_to_screen(
+            win,
+            width_ratio=0.86,
+            height_ratio=0.8,
+            min_w=560,
+            min_h=360,
+            max_w=1080,
+            max_h=760,
+        )
         win.transient(parent_win)
 
         root_frame = ttk.Frame(win, padding=10, style="App.TFrame")
@@ -2542,7 +2581,7 @@ class ExperimentApp:
         petri_dishes_home()
         petri_dishes_down(3290)
         incubator_lid_up(200)
-        pulse_camera_relay(3)
+        pulse_camera_relay(4)
         time.sleep(3)
 
     def step_14(self):
