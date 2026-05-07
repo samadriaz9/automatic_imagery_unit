@@ -15,63 +15,90 @@ Shutdown: Ctrl+C runs full cleanup (see shutdown_all). SIGTERM (kill) also clean
 """
 import atexit
 import gc
-from pdb import run
 import signal
 import sys
 import time
 import cv2
 
-import filteration_suction_pump
-from suction_pump_up_down import (
-    suction_pump_up,
-    suction_pump_down,
-    suction_pump_home,
-    cleanup as suction_lift_cleanup,
-)
-from filteration_flask import (  # pins 12 and 16 CLK+ + DIR+ only M1
-    Filteration_flask_up,
-    Filteration_flask_down,
-    filteration_flask_config,
-    cleanup as filteration_cleanup,
-)
-from filteration_unit import (
-    Filteration_unit_up,
-    Filteration_unit_down,
-    filteration_unit_config,
-    cleanup as filteration_unit_cleanup,
-)
-from upper_suction_pump import (
-    upper_suction_pump,
-    upper_suction_pump_on,
-    upper_suction_pump_off,
-    cleanup as suction_cleanup,
-)
-from consumable import (
-    Consumable_up,
-    Consumable_down,
-    cleanup as consumable_cleanup,
-)
-from relay_control import (
-    P0,
-    P1,
-    P2,
-    P3,
-    P4,
-    P5,
-    P6,
-    P7,
-    run_relay,
-    run_relay_sequence,
-    cleanup as relay_cleanup,
-)
+def _missing_function(module_name, func_name):
+    def _inner(*_args, **_kwargs):
+        raise RuntimeError(f"Missing module '{module_name}': cannot run '{func_name}()'")
+    return _inner
+
+
+def _missing_cleanup(*_args, **_kwargs):
+    return None
+
+
+try:
+    from suction_pump_up_down import (
+        suction_pump_up,
+        suction_pump_down,
+        suction_pump_home,
+        cleanup as suction_lift_cleanup,
+    )
+except ModuleNotFoundError:
+    suction_pump_up = _missing_function("suction_pump_up_down", "suction_pump_up")
+    suction_pump_down = _missing_function("suction_pump_up_down", "suction_pump_down")
+    suction_pump_home = _missing_function("suction_pump_up_down", "suction_pump_home")
+    suction_lift_cleanup = _missing_cleanup
+
+try:
+    from filteration_flask import (
+        Filteration_flask_up,
+        Filteration_flask_down,
+        filteration_flask_config,
+        cleanup as filteration_cleanup,
+    )
+except ModuleNotFoundError:
+    Filteration_flask_up = _missing_function("filteration_flask", "Filteration_flask_up")
+    Filteration_flask_down = _missing_function("filteration_flask", "Filteration_flask_down")
+    filteration_flask_config = _missing_function("filteration_flask", "filteration_flask_config")
+    filteration_cleanup = _missing_cleanup
+
+try:
+    from filteration_unit import (
+        Filteration_unit_up,
+        Filteration_unit_down,
+        filteration_unit_config,
+        cleanup as filteration_unit_cleanup,
+    )
+except ModuleNotFoundError:
+    Filteration_unit_up = _missing_function("filteration_unit", "Filteration_unit_up")
+    Filteration_unit_down = _missing_function("filteration_unit", "Filteration_unit_down")
+    filteration_unit_config = _missing_function("filteration_unit", "filteration_unit_config")
+    filteration_unit_cleanup = _missing_cleanup
+
+try:
+    from upper_suction_pump import (
+        upper_suction_pump_on,
+        upper_suction_pump_off,
+        cleanup as suction_cleanup,
+    )
+except ModuleNotFoundError:
+    upper_suction_pump_on = _missing_function("upper_suction_pump", "upper_suction_pump_on")
+    upper_suction_pump_off = _missing_function("upper_suction_pump", "upper_suction_pump_off")
+    suction_cleanup = _missing_cleanup
+
+try:
+    from consumable import cleanup as consumable_cleanup
+except ModuleNotFoundError:
+    consumable_cleanup = _missing_cleanup
+
+from relay_control import P1, P7, run_relay, cleanup as relay_cleanup
 from incubation_module import Start_incubation
 from imaging import start_imaging_capture_pattern
 
-from filteration_suction_pump import (
-    filteration_suction_pump_on,
-    filteration_suction_pump_off,
-    cleanup as filteration_suction_cleanup,
-)
+try:
+    from filteration_suction_pump import (
+        filteration_suction_pump_on,
+        filteration_suction_pump_off,
+        cleanup as filteration_suction_cleanup,
+    )
+except ModuleNotFoundError:
+    filteration_suction_pump_on = _missing_function("filteration_suction_pump", "filteration_suction_pump_on")
+    filteration_suction_pump_off = _missing_function("filteration_suction_pump", "filteration_suction_pump_off")
+    filteration_suction_cleanup = _missing_cleanup
 
 from petri_dishes import (
     petri_dishes_home,
@@ -86,19 +113,31 @@ from camera_module import (
     cleanup as camera_cleanup,
 )
 
-from media_dispensor import (
-    Media_dispensor_home,
-    Media_dispensor_up,
-    Media_dispensor_down,
-    cleanup as media_dispensor_cleanup,
-)
+try:
+    from media_dispensor import (
+        Media_dispensor_home,
+        Media_dispensor_up,
+        Media_dispensor_down,
+        cleanup as media_dispensor_cleanup,
+    )
+except ModuleNotFoundError:
+    Media_dispensor_home = _missing_function("media_dispensor", "Media_dispensor_home")
+    Media_dispensor_up = _missing_function("media_dispensor", "Media_dispensor_up")
+    Media_dispensor_down = _missing_function("media_dispensor", "Media_dispensor_down")
+    media_dispensor_cleanup = _missing_cleanup
 
-from suction_pipe import (
-    suction_pipe_home,
-    suction_pipe_up,
-    suction_pipe_down,
-    cleanup as suction_pipe_cleanup,
-)
+try:
+    from suction_pipe import (
+        suction_pipe_home,
+        suction_pipe_up,
+        suction_pipe_down,
+        cleanup as suction_pipe_cleanup,
+    )
+except ModuleNotFoundError:
+    suction_pipe_home = _missing_function("suction_pipe", "suction_pipe_home")
+    suction_pipe_up = _missing_function("suction_pipe", "suction_pipe_up")
+    suction_pipe_down = _missing_function("suction_pipe", "suction_pipe_down")
+    suction_pipe_cleanup = _missing_cleanup
 
 from incubator_lid import (
     incubator_lid_home,
@@ -106,27 +145,33 @@ from incubator_lid import (
     incubator_lid_down,
     cleanup as incubator_lid_cleanup,
 )
-from usb_camera_thread import start_usb_camera_thread, stop_usb_camera_thread
 
-from solinoid_value_to_filteration import (
-    solinoid_value_to_filteration,
-    solinoid_value_to_filteration_on,
-    solinoid_value_to_filteration_off,
-    water_level_reached,
-    cleanup as solenoid_cleanup,
-)
-from solinoid_value_drain import (
-    solinoid_value_drain,
-    solinoid_value_drain_on,
-    solinoid_value_drain_off,
-    cleanup as drain_solenoid_cleanup,
-)
-from solinoid_waste import (
-    solinoid_waste,
-    solinoid_waste_on,
-    solinoid_waste_off,
-    cleanup as waste_solenoid_cleanup,
-)
+try:
+    from usb_camera_thread import stop_usb_camera_thread
+except ModuleNotFoundError:
+    def stop_usb_camera_thread(_worker):
+        return None
+
+try:
+    from solinoid_value_to_filteration import (
+        solinoid_value_to_filteration,
+        water_level_reached,
+        cleanup as solenoid_cleanup,
+    )
+except ModuleNotFoundError:
+    solinoid_value_to_filteration = _missing_function("solinoid_value_to_filteration", "solinoid_value_to_filteration")
+    water_level_reached = _missing_function("solinoid_value_to_filteration", "water_level_reached")
+    solenoid_cleanup = _missing_cleanup
+
+try:
+    from solinoid_value_drain import cleanup as drain_solenoid_cleanup
+except ModuleNotFoundError:
+    drain_solenoid_cleanup = _missing_cleanup
+
+try:
+    from solinoid_waste import cleanup as waste_solenoid_cleanup
+except ModuleNotFoundError:
+    waste_solenoid_cleanup = _missing_cleanup
 import RPi.GPIO as GPIO
 
 # --- Run once: stops PWM/relays/solenoid and releases GPIO (helps avoid drivers heating when idle) ---
