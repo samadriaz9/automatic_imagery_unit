@@ -104,7 +104,7 @@ def _missing_cleanup(*_args, **_kwargs):
 from camera_module import Camera_home, Camera_down, cleanup as camera_cleanup
 from imaging import start_imaging_capture_pattern
 from incubator_lid import incubator_lid_home, incubator_lid_up, cleanup as incubator_lid_cleanup
-from relay_control import P1, P7, run_relay, set_relay, cleanup as relay_cleanup
+from relay_control import P1, run_relay, set_relay, cleanup as relay_cleanup
 
 try:
     from filteration_flask import (
@@ -220,6 +220,9 @@ except ModuleNotFoundError:
 
 
 _shutdown_done = False
+CAMERA_RELAY_GPIO = 13  # Physical pin 33
+CAMERA_RELAY_ACTIVE = GPIO.HIGH
+CAMERA_RELAY_INACTIVE = GPIO.LOW
 
 
 def _bootstrap_gpio():
@@ -232,6 +235,21 @@ def _bootstrap_gpio():
         GPIO.setmode(GPIO.BCM)
     except Exception:
         pass
+    try:
+        GPIO.setup(CAMERA_RELAY_GPIO, GPIO.OUT, initial=CAMERA_RELAY_INACTIVE)
+    except Exception:
+        pass
+
+
+def pulse_camera_relay(seconds=3.0):
+    """
+    Pulse camera relay on physical pin 33 (BCM13).
+    Camera power toggles when relay is ON for ~3 seconds.
+    """
+    _bootstrap_gpio()
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_ACTIVE)
+    time.sleep(max(0.0, float(seconds)))
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
 
 
 def shutdown_all():
@@ -311,7 +329,7 @@ def open_usb_camera_with_recovery(
             return cap
         time.sleep(float(retry_wait_s))
 
-    run_relay(P7, 3)
+    pulse_camera_relay(3)
     # Camera needs additional time after relay cycle to enumerate.
     time.sleep(float(post_relay_wait_s))
 
@@ -440,7 +458,7 @@ class CameraTestWindow:
 
         def _relay_worker():
             try:
-                run_relay(P7, 3)
+                pulse_camera_relay(3)
             finally:
                 self.win.after(0, self._after_relay_close)
 
@@ -2496,7 +2514,7 @@ class ExperimentApp:
         petri_dishes_home()
         petri_dishes_down(3290)
         incubator_lid_up(200)
-        run_relay(P7, 3)
+        pulse_camera_relay(3)
         time.sleep(3)
 
     def step_14(self):
