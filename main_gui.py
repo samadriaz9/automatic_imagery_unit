@@ -101,9 +101,9 @@ def _missing_cleanup(*_args, **_kwargs):
     return None
 
 
-from camera_module import Camera_home, Camera_down, cleanup as camera_cleanup
+from camera_module import Camera_home, Camera_up, Camera_down, cleanup as camera_cleanup
 from imaging import start_imaging_capture_pattern
-from incubator_lid import incubator_lid_home, incubator_lid_up, cleanup as incubator_lid_cleanup
+from incubator_lid import incubator_lid_home, incubator_lid_up, incubator_lid_down, cleanup as incubator_lid_cleanup
 from relay_control import P1, run_relay, set_relay, cleanup as relay_cleanup
 
 try:
@@ -217,6 +217,11 @@ except ModuleNotFoundError:
     upper_suction_pump_on = _missing_function("upper_suction_pump", "upper_suction_pump_on")
     upper_suction_pump_off = _missing_function("upper_suction_pump", "upper_suction_pump_off")
     suction_cleanup = _missing_cleanup
+
+try:
+    from incubation_module import Start_incubation
+except ModuleNotFoundError:
+    Start_incubation = _missing_function("incubation_module", "Start_incubation")
 
 
 _shutdown_done = False
@@ -980,7 +985,7 @@ class ExperimentApp:
 
         tk.Label(
             left_panel,
-            text="How many experiment runs to enable (1–5):",
+            text="How many experiment runs to enable (1–10):",
             bg="#CFD9EA",
             fg="#1D3557",
             font=("TkDefaultFont", 13, "bold"),
@@ -994,7 +999,7 @@ class ExperimentApp:
                 current = int(run_count_var.get())
             except Exception:
                 current = 1
-            run_count_var.set(max(1, min(5, current + delta)))
+            run_count_var.set(max(1, min(10, current + delta)))
 
         _make_rounded_button(
             count_slot,
@@ -1105,15 +1110,9 @@ class ExperimentApp:
                 return None
             return v
 
-        run_profiles = {i: [] for i in range(1, 6)}
+        run_profiles = {i: [] for i in range(1, 11)}
 
-        run_delay_vars = [
-            tk.StringVar(value="0"),
-            tk.StringVar(value="8"),
-            tk.StringVar(value="16"),
-            tk.StringVar(value="24"),
-            tk.StringVar(value="32"),
-        ]
+        run_delay_vars = [tk.StringVar(value=str(i * 8)) for i in range(10)]
 
         def _adjust_delay_slot(idx, delta_h):
             try:
@@ -1338,8 +1337,8 @@ class ExperimentApp:
             try:
                 n = int(run_count_var.get())
             except (tk.TclError, ValueError):
-                n = 5
-            n = max(1, min(5, n))
+                n = 10
+            n = max(1, min(10, n))
             if k > n:
                 messagebox.showinfo(
                     "Runs disabled",
@@ -1392,8 +1391,8 @@ class ExperimentApp:
             try:
                 n = int(run_count_var.get())
             except (tk.TclError, ValueError):
-                n = 5
-            n = max(1, min(5, n))
+                n = 10
+            n = max(1, min(10, n))
 
             delays_h = _validate_run_slots(n)
             if delays_h is None:
@@ -1436,182 +1435,121 @@ class ExperimentApp:
                 self.root.after(ms, lambda ri=run_id: _run_sequence_item(ri))
 
         section_row = 2
-        step_btn_w = min(340, max(220, (sw - 120) // 3))
-        step_btn_h = 70
-        step_btn_radius = 18
-        step_btn_font = 16
-        popup_step_buttons = {}
-        popup_step_completed = set()
 
-        def _set_popup_step_button_visual(step_no, state_name):
-            btn = popup_step_buttons.get(step_no)
-            if btn is None:
-                return
-            img = getattr(btn, f"_img_{state_name}", None)
-            if img is not None:
-                btn.config(image=img)
-                btn.image = img
-
-        def _run_step_from_popup(step_no):
+        def _run_test_action(label, fn):
             if self.is_busy:
                 return
-            if step_no in popup_step_completed:
-                ok = messagebox.askyesno(
-                    "Confirm Step",
-                    f"{self.step_labels[step_no - 1]} already completed once.\nRun this step again?",
-                    parent=popup,
-                )
-                if not ok:
-                    return
+            self.set_busy(True, f"{label}...")
 
-            btn = popup_step_buttons.get(step_no)
-            if btn is not None:
-                btn.config(state=tk.DISABLED)
-            _set_popup_step_button_visual(step_no, "running")
-            self.run_specific_step(step_no)
-
-            def _poll_finish():
+            def _worker():
                 try:
-                    if not popup.winfo_exists():
-                        return
-                except Exception:
-                    return
-                if self.is_busy:
-                    popup.after(250, _poll_finish)
-                    return
+                    fn()
+                    self.write_log(f"{label}: done")
+                    self.root.after(0, lambda: self.set_busy(False, "Ready."))
+                except Exception as exc:
+                    self.write_log(f"{label} ERROR: {exc}")
+                    self.root.after(0, lambda: self.set_busy(False, f"{label} failed."))
 
-                if self._last_step_success is True:
-                    popup_step_completed.add(step_no)
-                    _set_popup_step_button_visual(step_no, "done")
-                else:
-                    _set_popup_step_button_visual(step_no, "normal")
-                if btn is not None:
-                    btn.config(state=tk.NORMAL)
+            threading.Thread(target=_worker, daemon=True).start()
 
-            popup.after(250, _poll_finish)
+        def _camera_up_test():
+            self._run_with_gpio_retry("Camera up", Camera_up, 200)
 
-        def _make_manual_step_button(parent, label, step_no, base_color=(22, 98, 212)):
-            btn = _make_rounded_button(
-                parent,
-                label,
-                lambda n=step_no: _run_step_from_popup(n),
-                width=step_btn_w,
-                height=step_btn_h,
-                radius=step_btn_radius,
-                bg_rgb=base_color,
-                font_size=step_btn_font,
-                parent_bg="#E9EEF7",
-            )
-            btn._img_normal = _rounded_button_photo(
-                step_btn_w, step_btn_h, step_btn_radius, base_color, label, font_size=step_btn_font
-            )
-            btn._img_running = _rounded_button_photo(
-                step_btn_w, step_btn_h, step_btn_radius, (214, 133, 18), label, font_size=step_btn_font
-            )
-            btn._img_done = _rounded_button_photo(
-                step_btn_w, step_btn_h, step_btn_radius, (24, 148, 86), label, font_size=step_btn_font
-            )
-            btn.config(image=btn._img_normal)
-            btn.image = btn._img_normal
-            popup_step_buttons[step_no] = btn
-            return btn
+        def _camera_down_test():
+            self._run_with_gpio_retry("Camera down", Camera_down, 200)
 
-        tk.Label(
-            wrapper,
-            text="Consumable Section",
-            background="#E9EEF7",
-            foreground="#0F2C52",
-            font=("TkDefaultFont", 16, "bold"),
-        ).grid(row=section_row, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 4))
-        section_row += 1
+        def _petri_test():
+            self._run_with_gpio_retry("Petri up", petri_dishes_up, 200)
+            time.sleep(0.2)
+            self._run_with_gpio_retry("Petri down", petri_dishes_down, 200)
 
-        consumable_steps = [2, 3]  # Change Media, Adjust Syringe
-        for i, step_no in enumerate(consumable_steps):
-            label = self.step_labels[step_no - 1]
-            consumable_color = (212, 126, 18) if step_no == 2 else (146, 72, 198)
-            btn = _make_manual_step_button(wrapper, label, step_no, base_color=consumable_color)
-            btn.grid(row=section_row, column=i, sticky="ew", padx=6, pady=6)
+        def _lid_test():
+            self._run_with_gpio_retry("Lid up", incubator_lid_up, 200)
+            time.sleep(0.2)
+            self._run_with_gpio_retry("Lid down", incubator_lid_down, 200)
 
-        insert_media_var = tk.StringVar(value="")
-        tk.Label(
-            wrapper,
-            textvariable=insert_media_var,
-            background="#E9EEF7",
-            foreground="#0E7A47",
-            font=("TkDefaultFont", 15, "bold"),
-        ).grid(row=section_row, column=2, sticky="w", padx=6, pady=6)
-
-        def _refresh_insert_media_label():
+        def _incubator_pid_test():
+            base = 37.0
             try:
-                if not popup.winfo_exists():
-                    return
+                base = float(self._read_ds18b20_c())
             except Exception:
-                return
-            try:
-                if media_dispensor_home_pressed():
-                    insert_media_var.set("Insert Media")
-                else:
-                    insert_media_var.set("")
-            except Exception:
-                insert_media_var.set("")
-            popup.after(500, _refresh_insert_media_label)
-
-        _refresh_insert_media_label()
-        section_row += 1
+                pass
+            # Few degrees rise test with fast 0.1s control polling.
+            Start_incubation(base + 2.0, duration_minutes=0.5, poll_seconds=0.1, max_duty=20.0)
 
         tk.Label(
             wrapper,
-            text="Run Experiment Manually Step by Step",
+            text="Hardware Quick Tests",
             background="#E9EEF7",
             foreground="#0F2C52",
             font=("TkDefaultFont", 16, "bold"),
-        ).grid(row=section_row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 4))
+        ).grid(row=section_row, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 6))
         section_row += 1
 
-        manual_steps = [1] + list(range(4, 15))  # Actual experiment sequence.
-        for idx, step_no in enumerate(manual_steps):
-            label = self.step_labels[step_no - 1]
-            btn = _make_manual_step_button(wrapper, label, step_no, base_color=(22, 98, 212))
-            r = section_row + idx // 3
-            c = idx % 3
-            btn.grid(row=r, column=c, sticky="ew", padx=6, pady=6)
-        section_row += (len(manual_steps) + 2) // 3
+        test_btn_w = min(260, max(180, (sw - 180) // 3))
+        test_btn_h = 66
+        test_radius = 18
 
-        drain_btn = _make_rounded_button(
+        _make_rounded_button(
             wrapper,
-            "Waste Solenoid 5 sec",
-            self.run_waste_solenoid_pulse,
-            width=step_btn_w,
-            height=step_btn_h,
-            radius=step_btn_radius,
-            bg_rgb=(34, 124, 164),
-            font_size=step_btn_font,
-            parent_bg="#E9EEF7",
-        )
-        drain_btn.grid(row=section_row, column=0, sticky="ew", padx=6, pady=6)
-        section_row += 1
-
-        tk.Label(
-            wrapper,
-            text="Only Incubation plus Imager",
-            background="#E9EEF7",
-            foreground="#0F2C52",
-            font=("TkDefaultFont", 16, "bold"),
-        ).grid(row=section_row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 4))
-        section_row += 1
-
-        combo_btn = _make_rounded_button(
-            wrapper,
-            "Incubate + Pictures",
-            self.run_incubate_and_picture_flow,
-            width=min(980, sw - 90),
-            height=78,
-            radius=24,
+            "Camera Up",
+            lambda: _run_test_action("Camera Up Test", _camera_up_test),
+            width=test_btn_w,
+            height=test_btn_h,
+            radius=test_radius,
             bg_rgb=(22, 98, 212),
-            font_size=23,
+            font_size=18,
             parent_bg="#E9EEF7",
-        )
-        combo_btn.grid(row=section_row, column=0, columnspan=3, sticky="ew", padx=6, pady=(6, 6))
+        ).grid(row=section_row, column=0, sticky="ew", padx=6, pady=6)
+
+        _make_rounded_button(
+            wrapper,
+            "Camera Down",
+            lambda: _run_test_action("Camera Down Test", _camera_down_test),
+            width=test_btn_w,
+            height=test_btn_h,
+            radius=test_radius,
+            bg_rgb=(22, 98, 212),
+            font_size=18,
+            parent_bg="#E9EEF7",
+        ).grid(row=section_row, column=1, sticky="ew", padx=6, pady=6)
+
+        _make_rounded_button(
+            wrapper,
+            "Petri Test",
+            lambda: _run_test_action("Petri Motor Test", _petri_test),
+            width=test_btn_w,
+            height=test_btn_h,
+            radius=test_radius,
+            bg_rgb=(146, 72, 198),
+            font_size=18,
+            parent_bg="#E9EEF7",
+        ).grid(row=section_row, column=2, sticky="ew", padx=6, pady=6)
+        section_row += 1
+
+        _make_rounded_button(
+            wrapper,
+            "Lid Test",
+            lambda: _run_test_action("Lid Motor Test", _lid_test),
+            width=test_btn_w,
+            height=test_btn_h,
+            radius=test_radius,
+            bg_rgb=(212, 126, 18),
+            font_size=18,
+            parent_bg="#E9EEF7",
+        ).grid(row=section_row, column=0, sticky="ew", padx=6, pady=6)
+
+        _make_rounded_button(
+            wrapper,
+            "Incubator PID Test",
+            lambda: _run_test_action("Incubator PID Test", _incubator_pid_test),
+            width=(test_btn_w * 2) + 12,
+            height=test_btn_h,
+            radius=test_radius,
+            bg_rgb=(34, 124, 164),
+            font_size=18,
+            parent_bg="#E9EEF7",
+        ).grid(row=section_row, column=1, columnspan=2, sticky="ew", padx=6, pady=6)
 
         # Keep only requested controls on left panel:
         # 1) number of experiments selector (already above)
