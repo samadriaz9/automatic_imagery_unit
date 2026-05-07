@@ -556,7 +556,10 @@ class ExperimentApp:
         self.root.minsize(min(760, sw), min(440, sh))
         self.root.maxsize(sw, sh)
         self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
-        self.root.geometry(self._initial_geometry())
+        try:
+            self.root.attributes("-fullscreen", True)
+        except Exception:
+            self.root.geometry(self._initial_geometry())
         self._setup_styles()
         self._app_icon_photo = None
         self._title_icon_photo = None
@@ -1610,184 +1613,37 @@ class ExperimentApp:
         )
         combo_btn.grid(row=section_row, column=0, columnspan=3, sticky="ew", padx=6, pady=(6, 6))
 
-        run_btn_h = 80
-        run_radius = 20
-        run_font = 18
+        # Keep only requested controls on left panel:
+        # 1) number of experiments selector (already above)
+        # 2) Incubate + Pictures
+        # 3) Configuration
+        left_panel.rowconfigure(12, weight=1)
 
-        def _grid_run_button(btn, row_idx, top_pad=6):
-            btn.grid(row=row_idx, column=0, sticky="ew", padx=12, pady=(top_pad, 6))
-
-        full_btn = _make_rounded_button(
+        config_btn = _make_rounded_button(
             left_panel,
-            "Run 1st Experiment",
-            lambda: _on_run_k(1),
-            width=run_col_w,
-            height=run_btn_h,
-            radius=run_radius,
-            bg_rgb=(12, 158, 94),
-            font_size=run_font,
-            parent_bg="#CFD9EA",
-        )
-        _grid_run_button(full_btn, 8, top_pad=10)
-        _make_delay_slot(8, run_delay_vars[0], top_pad=10)
-        profile_btn_1 = _make_rounded_button(
-            left_panel,
-            "Profile",
+            "Configuration",
             lambda: _open_run_profile_editor(1),
-            width=160,
-            height=72,
-            radius=22,
-            bg_rgb=(92, 122, 201),
-            font_size=16,
-            parent_bg="#CFD9EA",
-        )
-        profile_btn_1.grid(row=8, column=2, columnspan=2, sticky="ew", padx=(6, 12), pady=(10, 6))
-
-        run2 = _make_rounded_button(
-            left_panel,
-            "Run 2nd Experiment",
-            lambda: _on_run_k(2),
             width=run_col_w,
-            height=run_btn_h,
-            radius=run_radius,
-            bg_rgb=(12, 158, 94),
-            font_size=run_font,
-            parent_bg="#CFD9EA",
-        )
-        _grid_run_button(run2, 9)
-        _make_delay_slot(9, run_delay_vars[1])
-        profile_btn_2 = _make_rounded_button(
-            left_panel,
-            "Profile",
-            lambda: _open_run_profile_editor(2),
-            width=160,
-            height=72,
-            radius=22,
+            height=80,
+            radius=24,
             bg_rgb=(92, 122, 201),
-            font_size=16,
+            font_size=22,
             parent_bg="#CFD9EA",
         )
-        profile_btn_2.grid(row=9, column=2, columnspan=2, sticky="ew", padx=(6, 12), pady=6)
+        config_btn.grid(row=8, column=0, columnspan=2, sticky="ew", padx=12, pady=(10, 6))
 
-        run3 = _make_rounded_button(
+        incubate_btn = _make_rounded_button(
             left_panel,
-            "Run 3rd Experiment",
-            lambda: _on_run_k(3),
-            width=run_col_w,
-            height=run_btn_h,
-            radius=run_radius,
-            bg_rgb=(12, 158, 94),
-            font_size=run_font,
-            parent_bg="#CFD9EA",
-        )
-        _grid_run_button(run3, 10)
-        _make_delay_slot(10, run_delay_vars[2])
-        profile_btn_3 = _make_rounded_button(
-            left_panel,
-            "Profile",
-            lambda: _open_run_profile_editor(3),
-            width=160,
-            height=72,
-            radius=22,
-            bg_rgb=(92, 122, 201),
-            font_size=16,
-            parent_bg="#CFD9EA",
-        )
-        profile_btn_3.grid(row=10, column=2, columnspan=2, sticky="ew", padx=(6, 12), pady=6)
-
-        run4 = _make_rounded_button(
-            left_panel,
-            "Run 4th Experiment",
-            lambda: _on_run_k(4),
-            width=run_col_w,
-            height=run_btn_h,
-            radius=run_radius,
-            bg_rgb=(12, 158, 94),
-            font_size=run_font,
-            parent_bg="#CFD9EA",
-        )
-        _grid_run_button(run4, 11)
-        _make_delay_slot(11, run_delay_vars[3])
-        profile_btn_4 = _make_rounded_button(
-            left_panel,
-            "Profile",
-            lambda: _open_run_profile_editor(4),
-            width=160,
-            height=72,
-            radius=22,
-            bg_rgb=(92, 122, 201),
-            font_size=16,
-            parent_bg="#CFD9EA",
-        )
-        profile_btn_4.grid(row=11, column=2, columnspan=2, sticky="ew", padx=(6, 12), pady=6)
-
-        run5 = _make_rounded_button(
-            left_panel,
-            "Run 5th Experiment",
-            lambda: _on_run_k(5),
-            width=run_col_w,
-            height=run_btn_h,
-            radius=run_radius,
-            bg_rgb=(12, 158, 94),
-            font_size=run_font,
-            parent_bg="#CFD9EA",
-        )
-        _grid_run_button(run5, 12)
-        _make_delay_slot(12, run_delay_vars[4])
-        profile_btn_5 = _make_rounded_button(
-            left_panel,
-            "Profile",
-            lambda: _open_run_profile_editor(5),
-            width=160,
-            height=72,
-            radius=22,
-            bg_rgb=(92, 122, 201),
-            font_size=16,
-            parent_bg="#CFD9EA",
-        )
-        profile_btn_5.grid(row=12, column=2, columnspan=2, sticky="ew", padx=(6, 12), pady=6)
-
-        start_sequence_btn = _make_rounded_button(
-            left_panel,
-            "Start Scheduled Sequence",
-            _start_experiment_sequence,
+            "Incubate + Pictures",
+            self.run_incubate_and_picture_flow,
             width=run_col_w,
             height=84,
             radius=24,
             bg_rgb=(22, 98, 212),
-            font_size=19,
+            font_size=21,
             parent_bg="#CFD9EA",
         )
-        start_sequence_btn.grid(
-            row=13, column=0, columnspan=2, sticky="ew", padx=12, pady=(10, 6)
-        )
-
-        left_panel.rowconfigure(14, weight=1)
-
-        close_exp = _make_rounded_button(
-            left_panel,
-            "Close Panel",
-            _close_popup,
-            width=run_col_w,
-            height=72,
-            radius=26,
-            bg_rgb=(194, 77, 0),
-            font_size=22,
-            parent_bg="#CFD9EA",
-        )
-        close_exp.grid(row=15, column=0, columnspan=2, sticky="ew", padx=12, pady=(10, 14))
-
-        def _sync_run_buttons(*_args):
-            try:
-                n = int(run_count_var.get())
-            except (tk.TclError, ValueError):
-                n = 5
-            n = max(1, min(5, n))
-            for i, b in enumerate((full_btn, run2, run3, run4, run5), start=1):
-                b.config(state=tk.NORMAL if i <= n else tk.DISABLED)
-
-        run_count_var.trace_add("write", _sync_run_buttons)
-        _sync_run_buttons()
+        incubate_btn.grid(row=9, column=0, columnspan=2, sticky="ew", padx=12, pady=(6, 10))
 
         popup.bind("<Escape>", lambda _e: _close_popup())
 
