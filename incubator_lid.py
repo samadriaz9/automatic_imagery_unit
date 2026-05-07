@@ -1,58 +1,39 @@
 """
 Incubator lid stepper control (direct GPIO STEP + DIR).
 
-- STEP uses GPIO6 (physical pin 31)
-- DIR/CW+ uses GPIO14 (physical pin 8)
-- Limit switch uses second I2C expander PCF8574 @ 0x21, pin P1
+- STEP uses GPIO18
+- DIR/CW+ uses GPIO17
+- Limit switch uses direct Raspberry Pi GPIO6
 
 Hardware: tie EN on the driver to GND (or per datasheet).
 """
 import RPi.GPIO as GPIO
 import time
-import smbus
 
-STEP_PIN = 6    # CLK+
-DIR_PIN = 14    # CW+ (pin 8)
+DIR_PIN   = 17
+STEP_PIN  = 18
+LIMIT_PIN = 6
 
 delay = 0.001
 
 _initialized = False
-_i2c_initialized = False
-_bus = None
-
-PCF8574_ADDRESS = 0x21
-LIMIT_P = 1  # P1
-LIMIT_ACTIVE_LOW = False  # set False because your switch reads 1 when pressed
 
 
 def _ensure_gpio():
     global _initialized
     if not _initialized:
         GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
         GPIO.setup(STEP_PIN, GPIO.OUT, initial=GPIO.LOW)
         GPIO.setup(DIR_PIN, GPIO.OUT, initial=GPIO.LOW)
+        # Direct limit switch: not pressed=HIGH, pressed=LOW.
+        GPIO.setup(LIMIT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         _initialized = True
 
 
-def _ensure_i2c():
-    """Initialize I2C bus + configure PCF8574 inputs (once)."""
-    global _i2c_initialized, _bus
-    if not _i2c_initialized:
-        _bus = smbus.SMBus(1)
-        _bus.write_byte(PCF8574_ADDRESS, 0xFF)  # all input pull-ups
-        _i2c_initialized = True
-
-
-def _read_limit_p1():
-    """Read P1 state from PCF8574 (returns 0 or 1)."""
-    _ensure_i2c()
-    value = _bus.read_byte(PCF8574_ADDRESS)
-    return (value >> LIMIT_P) & 0x01
-
-
 def _limit_pressed():
-    state = _read_limit_p1()
-    return state == 0 if LIMIT_ACTIVE_LOW else state == 1
+    _ensure_gpio()
+    return GPIO.input(LIMIT_PIN) == GPIO.LOW
 
 
 def _step(steps, direction_high, stop_on_limit=False):
@@ -72,28 +53,28 @@ def _step(steps, direction_high, stop_on_limit=False):
 
 def incubator_lid_up(steps):
     """Move incubator lid UP by the given number of steps."""
-    print(f"Incubator lid: moving UP {steps} steps (DIR=GPIO14 HIGH)")
+    print(f"Incubator lid: moving UP {steps} steps")
     # Allow UP even when limit is pressed, so lid can move away from switch.
     _step(steps, direction_high=True, stop_on_limit=False)
 
 
 def incubator_lid_down(steps):
     """Move incubator lid DOWN by the given number of steps."""
-    print(f"Incubator lid: moving DOWN {steps} steps (DIR=GPIO14 LOW)")
+    print(f"Incubator lid: moving DOWN {steps} steps")
     # Block DOWN when limit is pressed to avoid pushing into the switch.
     _step(steps, direction_high=False, stop_on_limit=True)
 
 
 def incubator_lid_home():
-    """Move DOWN until P1 limit switch is pressed."""
-    print("Incubator lid: homing DOWN until P1 limit switch is pressed")
+    """Move DOWN until direct GPIO limit switch is pressed."""
+    print("Incubator lid: homing DOWN until limit switch is pressed")
     _ensure_gpio()
     GPIO.output(DIR_PIN, GPIO.LOW)  # same as down
     time.sleep(delay)
 
     while True:
         if _limit_pressed():
-            print("Incubator lid: P1 limit switch detected, homing stop.")
+            print("Incubator lid: limit switch detected, homing stop.")
             break
         GPIO.output(STEP_PIN, GPIO.HIGH)
         time.sleep(delay)
@@ -109,13 +90,6 @@ Incubator_lid_home = incubator_lid_home
 
 def cleanup():
     """Release state (GPIO cleanup handled by main)."""
-    global _initialized, _i2c_initialized, _bus
+    global _initialized
     if _initialized:
         _initialized = False
-    if _i2c_initialized and _bus is not None:
-        try:
-            _bus.close()
-        except AttributeError:
-            pass
-        _i2c_initialized = False
-        _bus = None
