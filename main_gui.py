@@ -91,53 +91,132 @@ def _make_rounded_button(
     btn.image = img
     return btn
 
+def _missing_function(module_name, func_name):
+    def _inner(*_args, **_kwargs):
+        raise RuntimeError(f"Missing module '{module_name}': cannot run '{func_name}()'")
+    return _inner
+
+
+def _missing_cleanup(*_args, **_kwargs):
+    return None
+
+
 from camera_module import Camera_home, Camera_down, cleanup as camera_cleanup
-from filteration_flask import (
-    Filteration_flask_up,
-    filteration_flask_config,
-    cleanup as filteration_cleanup,
-)
-from filteration_suction_pump import (
-    filteration_suction_pump_on,
-    filteration_suction_pump_off,
-    cleanup as filteration_suction_cleanup,
-)
-from filteration_unit import Filteration_unit_up, filteration_unit_config, cleanup as filteration_unit_cleanup
 from imaging import start_imaging_capture_pattern
 from incubator_lid import incubator_lid_home, incubator_lid_up, cleanup as incubator_lid_cleanup
-from media_dispensor import (
-    Media_dispensor_home,
-    Media_dispensor_up,
-    Media_dispensor_down,
-    media_dispensor_home_pressed,
-    cleanup as media_dispensor_cleanup,
-)
-from petri_dishes import (
-    petri_dishes_home,
-    petri_dishes_down,
-    petri_dishes_up,
-    cleanup as petri_dishes_cleanup,
-)
 from relay_control import P1, P7, run_relay, set_relay, cleanup as relay_cleanup
-from solinoid_value_drain import cleanup as drain_solenoid_cleanup
-from solinoid_value_to_filteration import (
-    solinoid_value_to_filteration,
-    water_level_reached,
-    cleanup as solenoid_cleanup,
-)
-from solinoid_waste import (
-    solinoid_waste_on,
-    solinoid_waste_off,
-    cleanup as waste_solenoid_cleanup,
-)
-from suction_pipe import suction_pipe_home, suction_pipe_up, suction_pipe_down, cleanup as suction_pipe_cleanup
-from suction_pump_up_down import (
-    suction_pump_home,
-    suction_pump_up,
-    suction_pump_down,
-    cleanup as suction_lift_cleanup,
-)
-from upper_suction_pump import upper_suction_pump_on, upper_suction_pump_off, cleanup as suction_cleanup
+
+try:
+    from filteration_flask import (
+        Filteration_flask_up,
+        filteration_flask_config,
+        cleanup as filteration_cleanup,
+    )
+except ModuleNotFoundError:
+    Filteration_flask_up = _missing_function("filteration_flask", "Filteration_flask_up")
+    filteration_flask_config = _missing_function("filteration_flask", "filteration_flask_config")
+    filteration_cleanup = _missing_cleanup
+
+try:
+    from filteration_suction_pump import (
+        filteration_suction_pump_on,
+        filteration_suction_pump_off,
+        cleanup as filteration_suction_cleanup,
+    )
+except ModuleNotFoundError:
+    filteration_suction_pump_on = _missing_function("filteration_suction_pump", "filteration_suction_pump_on")
+    filteration_suction_pump_off = _missing_function("filteration_suction_pump", "filteration_suction_pump_off")
+    filteration_suction_cleanup = _missing_cleanup
+
+try:
+    from filteration_unit import Filteration_unit_up, filteration_unit_config, cleanup as filteration_unit_cleanup
+except ModuleNotFoundError:
+    Filteration_unit_up = _missing_function("filteration_unit", "Filteration_unit_up")
+    filteration_unit_config = _missing_function("filteration_unit", "filteration_unit_config")
+    filteration_unit_cleanup = _missing_cleanup
+
+try:
+    from media_dispensor import (
+        Media_dispensor_home,
+        Media_dispensor_up,
+        Media_dispensor_down,
+        media_dispensor_home_pressed,
+        cleanup as media_dispensor_cleanup,
+    )
+except ModuleNotFoundError:
+    Media_dispensor_home = _missing_function("media_dispensor", "Media_dispensor_home")
+    Media_dispensor_up = _missing_function("media_dispensor", "Media_dispensor_up")
+    Media_dispensor_down = _missing_function("media_dispensor", "Media_dispensor_down")
+    media_dispensor_home_pressed = _missing_function("media_dispensor", "media_dispensor_home_pressed")
+    media_dispensor_cleanup = _missing_cleanup
+
+try:
+    from petri_dishes import (
+        petri_dishes_home,
+        petri_dishes_down,
+        petri_dishes_up,
+        cleanup as petri_dishes_cleanup,
+    )
+except ModuleNotFoundError:
+    petri_dishes_home = _missing_function("petri_dishes", "petri_dishes_home")
+    petri_dishes_down = _missing_function("petri_dishes", "petri_dishes_down")
+    petri_dishes_up = _missing_function("petri_dishes", "petri_dishes_up")
+    petri_dishes_cleanup = _missing_cleanup
+
+try:
+    from solinoid_value_drain import cleanup as drain_solenoid_cleanup
+except ModuleNotFoundError:
+    drain_solenoid_cleanup = _missing_cleanup
+
+try:
+    from solinoid_value_to_filteration import (
+        solinoid_value_to_filteration,
+        water_level_reached,
+        cleanup as solenoid_cleanup,
+    )
+except ModuleNotFoundError:
+    solinoid_value_to_filteration = _missing_function("solinoid_value_to_filteration", "solinoid_value_to_filteration")
+    water_level_reached = _missing_function("solinoid_value_to_filteration", "water_level_reached")
+    solenoid_cleanup = _missing_cleanup
+
+try:
+    from solinoid_waste import (
+        solinoid_waste_on,
+        solinoid_waste_off,
+        cleanup as waste_solenoid_cleanup,
+    )
+except ModuleNotFoundError:
+    solinoid_waste_on = _missing_function("solinoid_waste", "solinoid_waste_on")
+    solinoid_waste_off = _missing_function("solinoid_waste", "solinoid_waste_off")
+    waste_solenoid_cleanup = _missing_cleanup
+
+try:
+    from suction_pipe import suction_pipe_home, suction_pipe_up, suction_pipe_down, cleanup as suction_pipe_cleanup
+except ModuleNotFoundError:
+    suction_pipe_home = _missing_function("suction_pipe", "suction_pipe_home")
+    suction_pipe_up = _missing_function("suction_pipe", "suction_pipe_up")
+    suction_pipe_down = _missing_function("suction_pipe", "suction_pipe_down")
+    suction_pipe_cleanup = _missing_cleanup
+
+try:
+    from suction_pump_up_down import (
+        suction_pump_home,
+        suction_pump_up,
+        suction_pump_down,
+        cleanup as suction_lift_cleanup,
+    )
+except ModuleNotFoundError:
+    suction_pump_home = _missing_function("suction_pump_up_down", "suction_pump_home")
+    suction_pump_up = _missing_function("suction_pump_up_down", "suction_pump_up")
+    suction_pump_down = _missing_function("suction_pump_up_down", "suction_pump_down")
+    suction_lift_cleanup = _missing_cleanup
+
+try:
+    from upper_suction_pump import upper_suction_pump_on, upper_suction_pump_off, cleanup as suction_cleanup
+except ModuleNotFoundError:
+    upper_suction_pump_on = _missing_function("upper_suction_pump", "upper_suction_pump_on")
+    upper_suction_pump_off = _missing_function("upper_suction_pump", "upper_suction_pump_off")
+    suction_cleanup = _missing_cleanup
 
 
 _shutdown_done = False
