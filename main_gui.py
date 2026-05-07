@@ -220,7 +220,7 @@ except ModuleNotFoundError:
 
 
 _shutdown_done = False
-CAMERA_RELAY_GPIO = 7   # BCM 7
+CAMERA_RELAY_GPIO = 25  # Physical pin 22
 CAMERA_RELAY_ACTIVE = GPIO.LOW
 CAMERA_RELAY_INACTIVE = GPIO.HIGH
 
