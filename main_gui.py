@@ -252,12 +252,22 @@ def pulse_camera_relay(seconds=3.0, active_state=None):
     time.sleep(max(0.0, float(seconds)))
     # Always restore configured OFF state (important for active-low relays).
     GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
+    # Release pin after pulse so line is not actively driven.
+    try:
+        GPIO.setup(CAMERA_RELAY_GPIO, GPIO.IN)
+    except Exception:
+        pass
 
 
 def camera_relay_force_off():
     """Force camera relay to OFF state."""
     _bootstrap_gpio()
     GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
+    # Release pin after forcing OFF.
+    try:
+        GPIO.setup(CAMERA_RELAY_GPIO, GPIO.IN)
+    except Exception:
+        pass
 
 
 def shutdown_all():
