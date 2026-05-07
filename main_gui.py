@@ -220,7 +220,7 @@ except ModuleNotFoundError:
 
 
 _shutdown_done = False
-CAMERA_RELAY_GPIO = 13  # Physical pin 33
+CAMERA_RELAY_GPIO = 25  # Physical pin 22
 CAMERA_RELAY_ACTIVE = GPIO.HIGH
 CAMERA_RELAY_INACTIVE = GPIO.LOW
 
@@ -241,15 +241,17 @@ def _bootstrap_gpio():
         pass
 
 
-def pulse_camera_relay(seconds=3.0):
+def pulse_camera_relay(seconds=3.0, active_state=None):
     """
-    Pulse camera relay on physical pin 33 (BCM13).
+    Pulse camera relay GPIO for camera power toggle.
     Camera power toggles when relay is ON for ~3 seconds.
     """
     _bootstrap_gpio()
-    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_ACTIVE)
+    on_state = CAMERA_RELAY_ACTIVE if active_state is None else active_state
+    off_state = GPIO.LOW if on_state == GPIO.HIGH else GPIO.HIGH
+    GPIO.output(CAMERA_RELAY_GPIO, on_state)
     time.sleep(max(0.0, float(seconds)))
-    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
+    GPIO.output(CAMERA_RELAY_GPIO, off_state)
 
 
 def shutdown_all():
@@ -329,10 +331,18 @@ def open_usb_camera_with_recovery(
             return cap
         time.sleep(float(retry_wait_s))
 
-    pulse_camera_relay(3)
-    # Camera needs additional time after relay cycle to enumerate.
+    # Try recovery with configured polarity first.
+    pulse_camera_relay(3, active_state=CAMERA_RELAY_ACTIVE)
     time.sleep(float(post_relay_wait_s))
+    for _ in range(max(1, int(post_relay_tries))):
+        cap = open_usb_camera(device_index)
+        if cap is not None:
+            return cap
+        time.sleep(float(retry_wait_s))
 
+    # Fallback: relay boards can be active-low; try opposite polarity once.
+    pulse_camera_relay(3, active_state=CAMERA_RELAY_INACTIVE)
+    time.sleep(float(post_relay_wait_s))
     for _ in range(max(1, int(post_relay_tries))):
         cap = open_usb_camera(device_index)
         if cap is not None:
