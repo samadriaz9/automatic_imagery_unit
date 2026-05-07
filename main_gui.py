@@ -248,10 +248,16 @@ def pulse_camera_relay(seconds=3.0, active_state=None):
     """
     _bootstrap_gpio()
     on_state = CAMERA_RELAY_ACTIVE if active_state is None else active_state
-    off_state = GPIO.LOW if on_state == GPIO.HIGH else GPIO.HIGH
     GPIO.output(CAMERA_RELAY_GPIO, on_state)
     time.sleep(max(0.0, float(seconds)))
-    GPIO.output(CAMERA_RELAY_GPIO, off_state)
+    # Always restore configured OFF state (important for active-low relays).
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
+
+
+def camera_relay_force_off():
+    """Force camera relay to OFF state."""
+    _bootstrap_gpio()
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
 
 
 def shutdown_all():
@@ -475,6 +481,10 @@ class CameraTestWindow:
         threading.Thread(target=_relay_worker, daemon=True).start()
 
     def _after_relay_close(self):
+        try:
+            camera_relay_force_off()
+        except Exception:
+            pass
         try:
             if self._app is not None:
                 self._app._hide_camera_closing_popup()
