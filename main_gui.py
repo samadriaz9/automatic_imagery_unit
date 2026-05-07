@@ -328,16 +328,12 @@ def open_usb_camera_with_recovery(
     post_relay_tries=5,
 ):
     """
-    Try to open camera multiple times, then power-cycle via relay and retry.
+    Always toggle camera power relay once, then try opening camera.
+    If open fails, toggle once more and retry.
     Returns an opened capture or None.
     """
-    for _ in range(max(1, int(direct_tries))):
-        cap = open_usb_camera(device_index)
-        if cap is not None:
-            return cap
-        time.sleep(float(retry_wait_s))
-
-    # Try recovery with configured polarity first.
+    # Required behavior: on camera open request, pulse relay for 3 s,
+    # then return relay to OFF/original state.
     pulse_camera_relay(3, active_state=CAMERA_RELAY_ACTIVE)
     time.sleep(float(post_relay_wait_s))
     for _ in range(max(1, int(post_relay_tries))):
@@ -346,14 +342,16 @@ def open_usb_camera_with_recovery(
             return cap
         time.sleep(float(retry_wait_s))
 
-    # Fallback: relay boards can be active-low; try opposite polarity once.
-    pulse_camera_relay(3, active_state=CAMERA_RELAY_INACTIVE)
+    # One more deterministic pulse+retry.
+    camera_relay_force_off()
+    pulse_camera_relay(3, active_state=CAMERA_RELAY_ACTIVE)
     time.sleep(float(post_relay_wait_s))
     for _ in range(max(1, int(post_relay_tries))):
         cap = open_usb_camera(device_index)
         if cap is not None:
             return cap
         time.sleep(float(retry_wait_s))
+    camera_relay_force_off()
     return None
 
 
