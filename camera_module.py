@@ -66,8 +66,8 @@ def Camera_home():
 
     _ensure_gpio()
 
-    # Set direction for DOWN
-    GPIO.output(DIR_PIN, GPIO.LOW)
+    # Set direction for DOWN (match Camera_down mapping).
+    GPIO.output(DIR_PIN, GPIO.HIGH)
 
     while True:
         if _limit_pressed():
