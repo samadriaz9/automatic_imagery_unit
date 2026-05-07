@@ -220,6 +220,14 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
 try:
+    x = input ('Enter to start camera: ')
+    Camera_home()
+
+
+
+
+
+
 
     x = input ('Enter to bring all home : ')
     Media_dispensor_home()
