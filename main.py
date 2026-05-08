@@ -284,6 +284,13 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
 try:
+    x = input ('Enter to start pictures: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(330)
+    Camera_home()
+    Camera_down(100)
+    
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
     Camera_home()
@@ -306,7 +313,7 @@ try:
     keep_temperature_pid(37, 1)
 
     x = input ('Enter to start pictures: ')
-    incubator_lid_down()
+    incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(330)
     Camera_home()
