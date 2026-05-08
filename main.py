@@ -265,13 +265,16 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
 try:
-    x = input ('Enter to start camera: ')
+    x = input ('Enter to start all modules home: ')
+    print("Step 01: All modules home")
     Camera_home()
-
-    x = input ('Enter to start incubator lid: ')
     incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_down(1035)
 
-    x = input ('Enter to start petri dishes: ')
+    x = input ('Enter to keep petri dishes home: ')
+    print("Step 02: ")
+    incubator_lid_home()
     petri_dishes_home()
 
 
