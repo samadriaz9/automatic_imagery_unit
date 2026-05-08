@@ -289,7 +289,42 @@ try:
     petri_dishes_home()
     petri_dishes_up(330)
     Camera_home()
-    Camera_up(1000)
+    Camera_up(2800)
+
+    x  = input ("Step 13: Enter to start pictures")
+    try:
+        ok = _camera_ready(device_index=0, tries=2, wait_s=0.05)
+        if ok:
+            print("camera on")
+        else:
+            pulse_camera_relay(4)
+            time.sleep(2)
+            print("camera switched on")
+    except Exception as e:
+        print(f"Camera not found")
+        sys.exit(1)
+    ok = False
+    for i in range(10):
+        if _camera_ready(device_index=0, tries=1, wait_s=0.05):
+            print("camera on")
+            ok = True
+            break
+        else:
+            print("camera off")
+            time.sleep(0.1)
+    if ok:
+        print("Starting imaging capture pattern")
+        start_imaging_capture_pattern()
+        time.sleep(0.5)
+        print("Imaging capture pattern completed")
+    else:
+        print("camera not on")
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(2000)
+    incubator_lid_up(200)
+    pulse_camera_relay(4)
+    time.sleep(2)
     
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
