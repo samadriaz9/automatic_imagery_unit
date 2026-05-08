@@ -63,7 +63,7 @@ def Start_incubation(
     kp=10.0,
     ki=0.2,
     kd=2.0,
-    max_duty=100.0,
+    max_duty=20.0,
     # Faster ramp so heater actually turns on quickly.
     ramp_step=2.0,
     ramp_delay=0.1,

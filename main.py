@@ -284,9 +284,6 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
 try:
-    x = input ('Enter to start incubation: ')
-    keep_temperature_pid(37, 1)
-
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
     Camera_home()
@@ -303,131 +300,18 @@ try:
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2000)
-    incubator_lid_up(200)
+    incubator_lid_down(200)
 
     x = input ('Enter to start incubation: ')
     keep_temperature_pid(37, 5)
 
     x = input ('Enter to start pictures: ')
+    incubator_lid_down()
+    petri_dishes_home()
+    petri_dishes_up(330)
     Camera_home()
-    Camera_down(2430)
-    incubator_lid_home()
-    petri_dishes_home()
+    Camera_down(100)
 
-
-    x = input ('Enter to bring all home : ')
-    Media_dispensor_home()
-    incubator_lid_home()
-    suction_pipe_home()
-    filteration_unit_config()
-    filteration_flask_config()
-    petri_dishes_home()
-    petri_dishes_down(1035)
-    suction_pump_home()
-    suction_pump_up(400)
-
- 
-    x = input ('step 1: Enter to Empty Syringe: ')
-    Media_dispensor_home()
-    x= input ('step 2: Enter to change the media: ')
-    Media_dispensor_home()
-    Media_dispensor_up(3500)
-    x = input ('step 3: Enter to adjust syringe position: ')
-    Media_dispensor_down(800)
-    
-    
-    x = input ("step 4: Enter to bring petri dishes home")
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_down(1035)
-    
-    x = input ("step 5: Enter to put filter paper on filteration flask")
-    suction_pipe_home()
-    suction_pump_home()
-    filteration_unit_config()
-    filteration_flask_config()
-    Filteration_flask_up(1140)
-    suction_pipe_up(900)
-    upper_suction_pump_on(22)
-    time.sleep(2)
-    suction_pipe_down(600)
-    time.sleep(1)
-    suction_pipe_home()
-    suction_pump_up(1245)
-    filteration_suction_pump_on(100)
-    upper_suction_pump_off()
-    suction_pipe_up(400)
-    time.sleep(2)
-    suction_pipe_home()
-
-    x = input ("Step 6: Enter to send filter paper to assembly")
-    filteration_unit_config()
-    filteration_flask_config()
-    Filteration_flask_up(10)
-    Filteration_unit_up(850)
-    time.sleep(1)
-    solinoid_value_to_filteration()
-    filteration_suction_pump_on(90)
-    time.sleep(20)
-    while water_level_reached():
-        filteration_suction_pump_off()
-        print(
-            "Water level sensor still reads FULL after filtration pump run — pump may not be drawing. "
-            "Fix the pump or plumbing before continuing."
-        )
-        input("Press Enter after fixing to re-run pump (90% for 20 s) and re-check...")
-        filteration_suction_pump_on(90)
-        time.sleep(20)
-
-    filteration_suction_pump_off()
-    
-    x = input ("Step 7: Enter for picking up media pad plus petri dishes")
-    suction_pump_home()
-    suction_pipe_home()
-    suction_pipe_up(1025)
-    upper_suction_pump_on(100)
-    time.sleep(2)
-    suction_pipe_down(1025)
-    suction_pump_up(3065)
-    suction_pipe_up(300)
-    upper_suction_pump_off()
-    
-    x = input ("Step 8: Enter for poruing media")
-    petri_dishes_home()
-    petri_dishes_down(300)
-    Media_dispensor_down(800)
-    time.sleep(2)
-    petri_dishes_down(725)
-    
-    
-    x = input ("Step 9: Enter to pick up filteration unit")
-    filteration_unit_config()
-    filteration_flask_config()
-    Filteration_flask_up(1130)
-    
-    
-    x = input ("Step 10: Picking up filter paper from filteration flask")
-    suction_pipe_home()
-    suction_pump_home()
-    suction_pump_up(1265)
-    suction_pipe_up(670)
-    upper_suction_pump_on(30)
-    time.sleep(3)
-    suction_pipe_down(670)
-    suction_pump_up(1805)
-    suction_pipe_up(710)
-    upper_suction_pump_off()
-    time.sleep(3)
-    suction_pipe_home()
-    
-    x = input ("Step 11: Enter to shift it for incubation")
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_down(3280)
-    incubator_lid_up(200)
-    
-    x = input ("Step 12: Enter to start incubation")
-    keep_temperature_pid(37, 1)
 
     x  = input ("Step 13: Enter to start pictures")
     try:
@@ -441,12 +325,6 @@ try:
     except Exception as e:
         print(f"Camera not found")
         sys.exit(1)
-    Camera_home()
-    Camera_down(2430)
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_down(3290)
-    petri_dishes_up(330)
     ok = False
     for i in range(10):
         if _camera_ready(device_index=0, tries=1, wait_s=0.05):
