@@ -306,7 +306,7 @@ try:
     incubator_lid_up(200)
 
     x = input ('Enter to start incubation: ')
-    keep_temperature_pid(37, 1)
+    keep_temperature_pid(37, 5)
 
     x = input ('Enter to start pictures: ')
     Camera_home()

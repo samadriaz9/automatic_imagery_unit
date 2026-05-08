@@ -57,16 +57,16 @@ def _set_heater_duty_smooth(pwm, current_duty, target_duty, max_duty, ramp_step,
 def Start_incubation(
     target_temp_c,
     duration_minutes,
-    poll_seconds=1.0,
+    poll_seconds=2.0,
     pwm_pin=RPWM_PIN,
-    pwm_freq=1000,
+    pwm_freq=100,
     kp=10.0,
     ki=0.2,
     kd=2.0,
-    max_duty=50.0,
-    # For precise control, ramp in small PWM duty increments.
-    ramp_step=0.1,
-    ramp_delay=0.05,
+    max_duty=100.0,
+    # Faster ramp so heater actually turns on quickly.
+    ramp_step=2.0,
+    ramp_delay=0.1,
 ):
     """
     Maintain incubation temperature using PID + BTS PWM heater output.
