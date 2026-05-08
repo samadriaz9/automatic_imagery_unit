@@ -85,7 +85,6 @@ try:
 except ModuleNotFoundError:
     consumable_cleanup = _missing_cleanup
 
-from relay_control import P1, P7, run_relay, cleanup as relay_cleanup
 from incubation_module import keep_temperature_pid
 from imaging import start_imaging_capture_pattern
 
@@ -174,6 +173,27 @@ except ModuleNotFoundError:
     waste_solenoid_cleanup = _missing_cleanup
 import RPi.GPIO as GPIO
 
+# Camera relay control (direct GPIO, no smbus/PCF8574).
+# Your wiring: physical pin 22 -> BCM25, active-low (relay OFF = HIGH).
+CAMERA_RELAY_GPIO = 25
+CAMERA_RELAY_ACTIVE = GPIO.LOW
+CAMERA_RELAY_INACTIVE = GPIO.HIGH
+
+
+def pulse_camera_relay(seconds=4.0):
+    """Pulse camera relay for `seconds`, then return pin to input (release)."""
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(CAMERA_RELAY_GPIO, GPIO.OUT, initial=CAMERA_RELAY_INACTIVE)
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_ACTIVE)
+    time.sleep(max(0.0, float(seconds)))
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
+    # Release pin so it is not actively driven after pulse.
+    try:
+        GPIO.setup(CAMERA_RELAY_GPIO, GPIO.IN)
+    except Exception:
+        pass
+
 # --- Run once: stops PWM/relays/solenoid and releases GPIO (helps avoid drivers heating when idle) ---
 _shutdown_done = False
 _usb_camera_worker = None
@@ -227,7 +247,6 @@ def shutdown_all():
         ("filteration_suction_pump", filteration_suction_cleanup),
     ("upper_suction_pump (DC)", suction_cleanup),
         ("suction_pump_up_down", suction_lift_cleanup),
-        ("relay", relay_cleanup),
         ("solenoid", solenoid_cleanup),
         ("drain_solenoid", drain_solenoid_cleanup),
         ("waste_solenoid", waste_solenoid_cleanup),
@@ -265,6 +284,9 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
 try:
+    x = input ('Enter to start incubation: ')
+    keep_temperature_pid(37, 1)
+
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
     Camera_home()
@@ -284,7 +306,6 @@ try:
     incubator_lid_up(200)
 
     x = input ('Enter to start incubation: ')
-    run_relay(P1, 1)
     keep_temperature_pid(37, 1)
 
     x = input ('Enter to start pictures: ')
@@ -406,7 +427,6 @@ try:
     incubator_lid_up(200)
     
     x = input ("Step 12: Enter to start incubation")
-    run_relay(P1, 1)
     keep_temperature_pid(37, 1)
 
     x  = input ("Step 13: Enter to start pictures")
@@ -415,8 +435,8 @@ try:
         if ok:
             print("camera on")
         else:
-            run_relay(P7, 3)
-            time.sleep(3)
+            pulse_camera_relay(4)
+            time.sleep(2)
             print("camera switched on")
     except Exception as e:
         print(f"Camera not found")
@@ -446,8 +466,8 @@ try:
     petri_dishes_home()
     petri_dishes_down(3290)
     incubator_lid_up(200)
-    run_relay(P7, 3)
-    time.sleep(3)
+    pulse_camera_relay(4)
+    time.sleep(2)
 
     x = input ('Step 14: Enter to put in trash: ')
     incubator_lid_home()
