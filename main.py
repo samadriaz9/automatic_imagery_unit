@@ -303,7 +303,7 @@ try:
     incubator_lid_down(200)
 
     x = input ('Enter to start incubation: ')
-    keep_temperature_pid(37, 5)
+    keep_temperature_pid(37, 1)
 
     x = input ('Enter to start pictures: ')
     incubator_lid_down()
