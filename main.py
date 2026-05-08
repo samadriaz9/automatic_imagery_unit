@@ -271,8 +271,8 @@ try:
     x = input ('Enter to start incubator lid: ')
     incubator_lid_home()
 
-
-
+    x = input ('Enter to start petri dishes: ')
+    petri_dishes_home()
 
 
     x = input ('Enter to bring all home : ')
