@@ -8,6 +8,9 @@ except Exception:
     PID = None
 
 
+RPWM_PIN = 12  # BCM 12, physical pin 32 (heater BTS PWM input)
+
+
 def _read_ds18b20_c(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
     """
     Read DS18B20 temperature in Celsius from w1 sysfs.
@@ -54,15 +57,16 @@ def _set_heater_duty_smooth(pwm, current_duty, target_duty, max_duty, ramp_step,
 def Start_incubation(
     target_temp_c,
     duration_minutes,
-    poll_seconds=2.0,
-    pwm_pin=12,
-    pwm_freq=100,
+    poll_seconds=1.0,
+    pwm_pin=RPWM_PIN,
+    pwm_freq=1000,
     kp=10.0,
     ki=0.2,
     kd=2.0,
     max_duty=50.0,
-    ramp_step=2.0,
-    ramp_delay=0.08,
+    # For precise control, ramp in small PWM duty increments.
+    ramp_step=0.1,
+    ramp_delay=0.05,
 ):
     """
     Maintain incubation temperature using PID + BTS PWM heater output.
@@ -82,7 +86,9 @@ def Start_incubation(
     poll_seconds = max(0.2, float(poll_seconds))
     max_duty = max(1.0, min(100.0, float(max_duty)))
 
-    print(f"[Incubation] Start PID: target={target_temp_c:.2f}C, duration={duration_minutes} min")
+    print(
+        f"[Incubation] Start PID: target={target_temp_c:.2f}C, duration={duration_minutes} min"
+    )
     print(
         f"[Incubation] Heater PWM pin={int(pwm_pin)}, freq={int(pwm_freq)}Hz, "
         f"PID(Kp={kp}, Ki={ki}, Kd={kd}), max_duty={max_duty:.1f}%"
@@ -100,6 +106,11 @@ def Start_incubation(
     if PID is not None:
         pid = PID(float(kp), float(ki), float(kd), setpoint=target_temp_c)
         pid.output_limits = (0.0, max_duty)
+        # Run PID update at same cadence as sensor polling (for consistency).
+        try:
+            pid.sample_time = float(poll_seconds)
+        except Exception:
+            pass
 
     start = time.time()
 
@@ -136,4 +147,14 @@ def Start_incubation(
         except Exception:
             pass
         print("[Incubation] Completed. Heater OFF.")
+
+
+def keep_temperature_pid(temperature_to_keep_c, minutes, **kwargs):
+    """
+    Convenience wrapper for main usage.
+
+    Example:
+        keep_temperature_pid(37.0, 60)  # keep 37C for 60 minutes
+    """
+    return Start_incubation(temperature_to_keep_c, minutes, **kwargs)
 

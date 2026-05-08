@@ -86,7 +86,7 @@ except ModuleNotFoundError:
     consumable_cleanup = _missing_cleanup
 
 from relay_control import P1, P7, run_relay, cleanup as relay_cleanup
-from incubation_module import Start_incubation
+from incubation_module import keep_temperature_pid
 from imaging import start_imaging_capture_pattern
 
 try:
@@ -277,6 +277,22 @@ try:
     incubator_lid_home()
     petri_dishes_home()
 
+    x = input ('Enter to shift for incubation: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(2000)
+    incubator_lid_up(200)
+
+    x = input ('Enter to start incubation: ')
+    run_relay(P1, 1)
+    keep_temperature_pid(37, 1)
+
+    x = input ('Enter to start pictures: ')
+    Camera_home()
+    Camera_down(2430)
+    incubator_lid_home()
+    petri_dishes_home()
+
 
     x = input ('Enter to bring all home : ')
     Media_dispensor_home()
@@ -391,7 +407,7 @@ try:
     
     x = input ("Step 12: Enter to start incubation")
     run_relay(P1, 1)
-    Start_incubation(37, 1)
+    keep_temperature_pid(37, 1)
 
     x  = input ("Step 13: Enter to start pictures")
     try:
