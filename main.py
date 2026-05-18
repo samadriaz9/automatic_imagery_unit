@@ -284,6 +284,37 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
 try:
+    
+    
+    x = input ('Enter to start all modules home: ')
+    print("Step 01: All modules home")
+    Camera_home()
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(2000)
+
+    x = input ('Enter to keep petri dishes home: ')
+    print("Step 02: ")
+    incubator_lid_home()
+    petri_dishes_home()
+
+    x = input ('Enter to shift for incubation: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(2000)
+    incubator_lid_down(200)
+
+    x = input ('Enter to start incubation: ')
+    keep_temperature_pid(37, 1)
+
+    x = input ('Enter to start pictures: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(330)
+    Camera_home()
+    Camera_down(100)
+
+
     x = input ('Enter to start pictures: ')
     incubator_lid_home()
     petri_dishes_home()
@@ -324,89 +355,6 @@ try:
     petri_dishes_up(2000)
     incubator_lid_up(200)
     pulse_camera_relay(4)
-    time.sleep(2)
-    
-    x = input ('Enter to start all modules home: ')
-    print("Step 01: All modules home")
-    Camera_home()
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(2000)
-
-    x = input ('Enter to keep petri dishes home: ')
-    print("Step 02: ")
-    incubator_lid_home()
-    petri_dishes_home()
-
-    x = input ('Enter to shift for incubation: ')
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(2000)
-    incubator_lid_down(200)
-
-    x = input ('Enter to start incubation: ')
-    keep_temperature_pid(37, 1)
-
-    x = input ('Enter to start pictures: ')
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(330)
-    Camera_home()
-    Camera_down(100)
-
-
-    x  = input ("Step 13: Enter to start pictures")
-    try:
-        ok = _camera_ready(device_index=0, tries=2, wait_s=0.05)
-        if ok:
-            print("camera on")
-        else:
-            pulse_camera_relay(4)
-            time.sleep(2)
-            print("camera switched on")
-    except Exception as e:
-        print(f"Camera not found")
-        sys.exit(1)
-    ok = False
-    for i in range(10):
-        if _camera_ready(device_index=0, tries=1, wait_s=0.05):
-            print("camera on")
-            ok = True
-            break
-        else:
-            print("camera off")
-            time.sleep(0.1)
-    if ok:
-        print("Starting imaging capture pattern")
-        start_imaging_capture_pattern()
-        time.sleep(0.5)
-        print("Imaging capture pattern completed")
-    else:
-        print("camera not on")
-    petri_dishes_home()
-    petri_dishes_down(3290)
-    incubator_lid_up(200)
-    pulse_camera_relay(4)
-    time.sleep(2)
-
-    x = input ('Step 14: Enter to put in trash: ')
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_down(1025)
-    suction_pipe_home()
-    suction_pump_home()
-    suction_pump_up(3055)
-    suction_pipe_up(1010)
-    upper_suction_pump_on(100)
-    time.sleep(2)
-    suction_pipe_home()
-    suction_pump_down(930)
-    upper_suction_pump_off()
-    suction_pipe_up(800)
-    for i in range(20):
-        suction_pump_up(120)
-        suction_pump_down(120)
-        time.sleep(0.01)
     time.sleep(2)
 
     x = input ('Step 15: Enter to Steriliz: ')
