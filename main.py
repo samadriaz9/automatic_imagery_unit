@@ -321,7 +321,7 @@ try:
     petri_dishes_home()
     petri_dishes_down(330)
     Camera_home()
-    Camera_up(2800)
+    Camera_up(3200)
 
     x  = input ("Step 13: Enter to start pictures")
     try:
@@ -330,7 +330,7 @@ try:
             print("camera on")
         else:
             pulse_camera_relay(4)
-            time.sleep(2)
+            time.sleep(6)
             print("camera switched on")
     except Exception as e:
         print(f"Camera not found")
@@ -353,7 +353,7 @@ try:
         print("camera not on")
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2000)
+    petri_dishes_up(2400)
     incubator_lid_down(300)
     pulse_camera_relay(4)
     time.sleep(2)
