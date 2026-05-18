@@ -313,7 +313,7 @@ try:
     petri_dishes_home()
     petri_dishes_up(330)
     Camera_home()
-    Camera_down(100)
+    Camera_up(100)
 
 
     x = input ('Enter to start pictures: ')
