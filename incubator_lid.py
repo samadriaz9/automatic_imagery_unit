@@ -1,85 +1,72 @@
 """
-Incubator lid stepper control (direct GPIO STEP + DIR).
+Incubator lid stepper control (direct GPIO STEP + DIR, no limit switch).
 
-- STEP uses GPIO18
-- DIR/CW+ uses GPIO17
-- Limit switch uses direct Raspberry Pi GPIO6
+- STEP: GPIO6 (BCM), physical pin 31
+- DIR:  GPIO16 (BCM), physical pin 36
 
 Hardware: tie EN on the driver to GND (or per datasheet).
+Tune HOMING_STEPS on the Pi if home does not reach the fully open position.
 """
-import RPi.GPIO as GPIO
 import time
 
-DIR_PIN   = 17
-STEP_PIN  = 18
-LIMIT_PIN = 6
+import RPi.GPIO as GPIO
 
-delay = 0.001
+STEP_PIN = 6
+DIR_PIN = 16
+
+STEP_DELAY = 0.001
+
+# Full travel to open/home when no limit switch is fitted (tune on hardware).
+HOMING_STEPS = 4000
+
+UP = GPIO.HIGH
+DOWN = GPIO.LOW
 
 _initialized = False
 
 
 def _ensure_gpio():
     global _initialized
-    if not _initialized:
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)
-        GPIO.setup(STEP_PIN, GPIO.OUT, initial=GPIO.LOW)
-        GPIO.setup(DIR_PIN, GPIO.OUT, initial=GPIO.LOW)
-        # Direct limit switch: not pressed=HIGH, pressed=LOW.
-        GPIO.setup(LIMIT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        _initialized = True
+    if _initialized:
+        return
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.setup(STEP_PIN, GPIO.OUT, initial=GPIO.LOW)
+    GPIO.setup(DIR_PIN, GPIO.OUT, initial=GPIO.LOW)
+    _initialized = True
 
 
-def _limit_pressed():
-    _ensure_gpio()
-    return GPIO.input(LIMIT_PIN) == GPIO.LOW
-
-
-def _step(steps, direction_high, stop_on_limit=False):
-    _ensure_gpio()
-    GPIO.output(DIR_PIN, GPIO.HIGH if direction_high else GPIO.LOW)
-    # Some stepper drivers need a short DIR setup time before the first step edge.
+def _pulse_step(delay=STEP_DELAY):
+    GPIO.output(STEP_PIN, GPIO.HIGH)
     time.sleep(delay)
-    for _ in range(steps):
-        if stop_on_limit and _limit_pressed():
-            print("Incubator lid: limit switch pressed -> stopping.")
-            break
-        GPIO.output(STEP_PIN, GPIO.HIGH)
-        time.sleep(delay)
-        GPIO.output(STEP_PIN, GPIO.LOW)
-        time.sleep(delay)
+    GPIO.output(STEP_PIN, GPIO.LOW)
+    time.sleep(delay)
+
+
+def _move(steps, direction, delay=STEP_DELAY):
+    _ensure_gpio()
+    GPIO.output(DIR_PIN, direction)
+    time.sleep(delay)
+    for _ in range(max(0, int(steps))):
+        _pulse_step(delay=delay)
 
 
 def incubator_lid_up(steps):
-    """Move incubator lid UP by the given number of steps."""
+    """Move incubator lid UP (open) by the given number of steps."""
     print(f"Incubator lid: moving UP {steps} steps")
-    # Allow UP even when limit is pressed, so lid can move away from switch.
-    _step(steps, direction_high=True, stop_on_limit=False)
+    _move(steps, direction=UP)
 
 
 def incubator_lid_down(steps):
-    """Move incubator lid DOWN by the given number of steps."""
+    """Move incubator lid DOWN (close) by the given number of steps."""
     print(f"Incubator lid: moving DOWN {steps} steps")
-    # Block DOWN when limit is pressed to avoid pushing into the switch.
-    _step(steps, direction_high=False, stop_on_limit=True)
+    _move(steps, direction=DOWN)
 
 
 def incubator_lid_home():
-    """Move UP until direct GPIO limit switch is pressed."""
-    print("Incubator lid: homing UP until limit switch is pressed")
-    _ensure_gpio()
-    GPIO.output(DIR_PIN, GPIO.HIGH)  # same as up — toward limit switch
-    time.sleep(delay)
-
-    while True:
-        if _limit_pressed():
-            print("Incubator lid: limit switch detected, homing stop.")
-            break
-        GPIO.output(STEP_PIN, GPIO.HIGH)
-        time.sleep(delay)
-        GPIO.output(STEP_PIN, GPIO.LOW)
-        time.sleep(delay)
+    """Drive to the open/home position using a fixed step count (no limit switch)."""
+    print(f"Incubator lid: homing UP {HOMING_STEPS} steps")
+    _move(HOMING_STEPS, direction=UP)
 
 
 # Optional CamelCase aliases
@@ -91,5 +78,4 @@ Incubator_lid_home = incubator_lid_home
 def cleanup():
     """Release state (GPIO cleanup handled by main)."""
     global _initialized
-    if _initialized:
-        _initialized = False
+    _initialized = False
