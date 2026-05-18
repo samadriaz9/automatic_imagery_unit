@@ -12,8 +12,8 @@ import time
 
 import RPi.GPIO as GPIO
 
-STEP_PIN = 17
-DIR_PIN = 18
+STEP_PIN = 18
+DIR_PIN = 17
 LIMIT_PIN = 6
 
 STEP_DELAY = 0.001
