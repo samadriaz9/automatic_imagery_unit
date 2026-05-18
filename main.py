@@ -311,7 +311,7 @@ try:
     x = input ('Enter to start pictures: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_down(330)
+    petri_dishes_up(500)
     Camera_home()
     Camera_up(3200)
 
