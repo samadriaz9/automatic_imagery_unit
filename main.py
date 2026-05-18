@@ -291,7 +291,7 @@ try:
     Camera_home()
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2000)
+    petri_dishes_up(2100)
 
     x = input ('Enter to keep petri dishes home: ')
     print("Step 02: ")
