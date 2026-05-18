@@ -311,14 +311,6 @@ try:
     x = input ('Enter to start pictures: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(330)
-    Camera_home()
-    Camera_up(100)
-
-
-    x = input ('Enter to start pictures: ')
-    incubator_lid_home()
-    petri_dishes_home()
     petri_dishes_down(330)
     Camera_home()
     Camera_up(3200)
@@ -330,7 +322,7 @@ try:
             print("camera on")
         else:
             pulse_camera_relay(4)
-            time.sleep(6)
+            time.sleep(10)
             print("camera switched on")
     except Exception as e:
         print(f"Camera not found")
