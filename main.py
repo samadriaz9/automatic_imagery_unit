@@ -292,7 +292,7 @@ try:
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2400)
-    incubator_lid_up(200)
+    incubator_lid_down(300)
 
     x = input ('Enter to keep petri dishes home: ')
     print("Step 02: ")
