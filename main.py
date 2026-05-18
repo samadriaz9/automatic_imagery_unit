@@ -354,7 +354,7 @@ try:
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2000)
-    incubator_lid_up(200)
+    incubator_lid_down(300)
     pulse_camera_relay(4)
     time.sleep(2)
 
