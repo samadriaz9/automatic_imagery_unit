@@ -66,10 +66,10 @@ def incubator_lid_down(steps):
 
 
 def incubator_lid_home():
-    """Move DOWN until direct GPIO limit switch is pressed."""
-    print("Incubator lid: homing DOWN until limit switch is pressed")
+    """Move UP until direct GPIO limit switch is pressed."""
+    print("Incubator lid: homing UP until limit switch is pressed")
     _ensure_gpio()
-    GPIO.output(DIR_PIN, GPIO.LOW)  # same as down
+    GPIO.output(DIR_PIN, GPIO.HIGH)  # same as up — toward limit switch
     time.sleep(delay)
 
     while True:
