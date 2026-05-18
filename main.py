@@ -302,7 +302,7 @@ try:
     x = input ('Enter to shift for incubation: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2000)
+    petri_dishes_up(2400)
     incubator_lid_down(200)
 
     x = input ('Enter to start incubation: ')
