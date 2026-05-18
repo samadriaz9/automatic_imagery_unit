@@ -136,7 +136,7 @@ def main() -> int:
         "--device",
         "-d",
         type=int,
-        default=0,
+        default=1,
         help="Camera device index (default: 0). On Linux this is typically /dev/videoN.",
     )
     p.add_argument(
