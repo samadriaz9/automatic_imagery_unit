@@ -1,11 +1,12 @@
 """
-Incubator lid stepper control (direct GPIO STEP + DIR, no limit switch).
+Incubator lid stepper control (direct GPIO STEP + DIR + LIMIT).
 
-- STEP: GPIO6 (BCM), physical pin 31
-- DIR:  GPIO16 (BCM), physical pin 36
+- STEP : GPIO6  (BCM), physical pin 31
+- DIR  : GPIO16 (BCM), physical pin 36
+- LIMIT: GPIO17 (BCM) — direct switch, PUD_UP, pressed = LOW
 
 Hardware: tie EN on the driver to GND (or per datasheet).
-Tune HOMING_STEPS on the Pi if home does not reach the fully open position.
+If limit is wired to a different GPIO, change LIMIT_PIN below.
 """
 import time
 
@@ -13,11 +14,11 @@ import RPi.GPIO as GPIO
 
 STEP_PIN = 6
 DIR_PIN = 16
+LIMIT_PIN = 17
 
 STEP_DELAY = 0.001
-
-# Full travel to open/home when no limit switch is fitted (tune on hardware).
-HOMING_STEPS = 4000
+# Safety cap only — homing normally stops on the limit switch.
+HOMING_MAX_STEPS = 10000
 
 UP = GPIO.HIGH
 DOWN = GPIO.LOW
@@ -33,7 +34,13 @@ def _ensure_gpio():
     GPIO.setwarnings(False)
     GPIO.setup(STEP_PIN, GPIO.OUT, initial=GPIO.LOW)
     GPIO.setup(DIR_PIN, GPIO.OUT, initial=GPIO.LOW)
+    GPIO.setup(LIMIT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     _initialized = True
+
+
+def _limit_pressed():
+    _ensure_gpio()
+    return GPIO.input(LIMIT_PIN) == GPIO.LOW
 
 
 def _pulse_step(delay=STEP_DELAY):
@@ -64,9 +71,24 @@ def incubator_lid_down(steps):
 
 
 def incubator_lid_home():
-    """Drive to the open/home position using a fixed step count (no limit switch)."""
-    print(f"Incubator lid: homing UP {HOMING_STEPS} steps")
-    _move(HOMING_STEPS, direction=UP)
+    """Move UP until the limit switch is pressed (no steps if already at home)."""
+    print("Incubator lid: homing UP until limit switch is pressed")
+    _ensure_gpio()
+
+    if _limit_pressed():
+        print("Incubator lid: limit switch already pressed, homing stop.")
+        return
+
+    GPIO.output(DIR_PIN, UP)
+    time.sleep(STEP_DELAY)
+
+    for _ in range(HOMING_MAX_STEPS):
+        if _limit_pressed():
+            print("Incubator lid: limit switch detected, homing stop.")
+            return
+        _pulse_step()
+
+    print("Incubator lid: homing stopped (max steps safety limit reached).")
 
 
 # Optional CamelCase aliases

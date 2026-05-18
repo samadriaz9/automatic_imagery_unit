@@ -8,7 +8,7 @@ Suction pump lift (stepper): STEP=21, DIR=12 (BCM); EN tied on hardware (see suc
 Petri dishes: STEP=10, DIR=22 (BCM); EN tied on hardware (see petri_dishes.py).
 Media dispensor: STEP=24, DIR=27 (BCM); physical pins 18 & 13 (see Media_dispensor.py).
 Suction pipe: STEP=8, DIR=20 (BCM); no limit switch — use up/down with steps only (see suction_pipe.py).
-Incubator lid: STEP=6, DIR=16 (BCM); physical pins 31 & 36; no limit (see incubator_lid.py).
+Incubator lid: STEP=6, DIR=16, LIMIT=17 (BCM); physical pins 31, 36 & 11 (see incubator_lid.py).
 Filtration solenoid: GPIO 26 (BCM), pin 37 (see solinoid_value_to_filteration.py).
 
 Shutdown: Ctrl+C runs full cleanup (see shutdown_all). SIGTERM (kill) also cleans up.
