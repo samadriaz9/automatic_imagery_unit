@@ -12,9 +12,9 @@ import time
 
 import RPi.GPIO as GPIO
 
-STEP_PIN = 6
-DIR_PIN = 16
-LIMIT_PIN = 17
+STEP_PIN = 17
+DIR_PIN = 18
+LIMIT_PIN = 6
 
 STEP_DELAY = 0.001
 # Safety cap only — homing normally stops on the limit switch.
