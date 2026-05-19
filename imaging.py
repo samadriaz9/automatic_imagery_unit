@@ -230,7 +230,6 @@ def start_imaging_capture_pattern(
     petri_step_per_row=85,
     camera_reset_each_row=True,
     square_crop=True,
-    square_grid=True,
     save_mosaic=True,
     mosaic_name="mosaic.jpg",
     mosaic_center_fraction=1.0,
@@ -250,6 +249,9 @@ def start_imaging_capture_pattern(
       with Camera_up from home). Row end: petri dishes up, then camera UP back to column 0.
     - Shift to the next row by moving petri dishes towards "up".
     - Optionally reset camera back to column 0 after each row (needed to keep a square coverage area).
+
+    ``camera_step_per_col`` and ``petri_step_per_row`` are independent (petri is no longer
+    forced to match camera step).
 
     Capture grid is ``rows``×``cols`` (default 7×7 = 49 tiles). ``mosaic.jpg`` is a full ``rows``×``cols`` stitch
     (axis swap + flip Y for this rig). After assembly, ``mosaic_crop_top_px`` pixels are removed
@@ -286,8 +288,8 @@ def start_imaging_capture_pattern(
         pass
 
     try:
-        if bool(square_grid):
-            petri_step_per_row = int(camera_step_per_col)
+        row_step = int(petri_step_per_row)
+        col_step = int(camera_step_per_col)
 
         total_tiles = int(rows) * int(cols)
         image_idx = 1
@@ -319,18 +321,18 @@ def start_imaging_capture_pattern(
 
                 # Move camera for next column in this row (except last col).
                 if c < cols - 1:
-                    Camera_down(int(camera_step_per_col))
+                    Camera_down(col_step)
                     time.sleep(settle_seconds)
 
             # End-of-row reposition
             if r < rows - 1:
-                # Move petri stage for next row.
-                petri_dishes_up(int(petri_step_per_row))
+                print(f"[Imaging] Next row: petri dishes UP {row_step} steps")
+                petri_dishes_up(row_step)
                 time.sleep(settle_seconds)
 
                 # Reset camera to column 0 for the next row (keeps square coverage).
                 if bool(camera_reset_each_row):
-                    back_steps = int((cols - 1) * camera_step_per_col)
+                    back_steps = int((cols - 1) * col_step)
                     if back_steps > 0:
                         Camera_up(back_steps)
                     time.sleep(settle_seconds)
