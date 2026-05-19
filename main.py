@@ -91,8 +91,8 @@ from incubation_module import keep_temperature_pid
 from imaging import start_imaging_capture_pattern
 
 # --- Imaging step sizes (edit here for trial-and-error) ---
-CAMERA_STEPSIZE = 75   # steps between each photo column (camera rail)
-PETRI_STEPSIZE = 75   # steps between each photo row (petri dish stage)
+CAMERA_STEPSIZE = 82   # steps between each photo column (camera rail)
+PETRI_STEPSIZE = 82   # steps between each photo row (petri dish stage)
 
 try:
     from filteration_suction_pump import (
