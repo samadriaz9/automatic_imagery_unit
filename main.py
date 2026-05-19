@@ -222,17 +222,77 @@ def power_off_usb_camera():
     pulse_camera_relay(CAMERA_RELAY_PULSE_S)
 
 
+def _suppress_opencv_logs():
+    try:
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    except Exception:
+        pass
+
+
+def _usb_camera_probe(device_index=0, read_tries=3, wait_s=0.15):
+    """
+    Probe USB camera once.
+
+    Returns:
+        'ready'        – opened and delivered a frame
+        'open_failed'  – V4L2 cannot open /dev/videoN (can't open camera by index)
+        'read_failed'  – opened but no valid frame yet
+    """
+    _suppress_opencv_logs()
+    idx = int(device_index)
+    last = "open_failed"
+    for _ in range(max(1, int(read_tries))):
+        cap = _open_usb_camera(device_index=idx)
+        if cap is None:
+            last = "open_failed"
+            time.sleep(float(wait_s))
+            continue
+        try:
+            if sys.platform.startswith("linux"):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    ok, frame = cap.read()
+            else:
+                ok, frame = cap.read()
+            if ok and frame is not None:
+                return "ready"
+            last = "read_failed"
+        finally:
+            try:
+                cap.release()
+            except Exception:
+                pass
+        time.sleep(float(wait_s))
+    return last
+
+
 def _check_camera_after_boot(device_index=0):
-    """After boot wait, try opening the camera several times before giving up."""
+    """After boot wait, try opening the camera; restart power if V4L2 cannot open."""
     checks = max(1, int(CAMERA_BOOT_POST_CHECKS))
     interval = max(0.0, float(CAMERA_BOOT_CHECK_INTERVAL_S))
+    idx = int(device_index)
     for n in range(1, checks + 1):
-        print(f"[Camera] Readiness check {n}/{checks}...")
-        if _camera_ready(device_index=device_index, tries=3, wait_s=0.15):
+        print(f"[Camera] Readiness check {n}/{checks} (/dev/video{idx})...")
+        status = _usb_camera_probe(device_index=idx, read_tries=2, wait_s=0.1)
+        if status == "ready":
             return True
+        if status == "open_failed":
+            print(
+                f"[Camera] V4L2: can't open camera by index (/dev/video{idx}) — "
+                "will restart camera power (relay OFF, then ON)"
+            )
+            return False
+        print("[Camera] Device opened but no frame yet, retrying...")
         if n < checks:
             time.sleep(interval)
     return False
+
+
+def restart_usb_camera_power(device_index=0):
+    """Relay OFF, brief pause, relay ON, boot wait (used after V4L2 open errors)."""
+    print("[Camera] Restarting camera power...")
+    power_off_usb_camera()
+    time.sleep(CAMERA_POWER_CYCLE_SETTLE_S)
+    return _power_cycle_camera_on(device_index=device_index)
 
 
 def _power_cycle_camera_on(device_index=0):
@@ -247,19 +307,19 @@ def _power_cycle_camera_on(device_index=0):
 def ensure_usb_camera_ready(device_index=0, max_attempts=CAMERA_POWER_ON_ATTEMPTS):
     """
     Try up to ``max_attempts`` times: power on, wait 10 s, check camera repeatedly.
-    On failure (except last attempt): power off, pause, power on again.
+    If V4L2 cannot open /dev/videoN, restart camera power immediately (OFF then ON).
     """
     attempts = max(1, int(max_attempts))
     for attempt in range(1, attempts + 1):
         print(f"[Camera] Power-on attempt {attempt}/{attempts}")
-        if _power_cycle_camera_on(device_index=device_index):
+        if attempt == 1:
+            ok = _power_cycle_camera_on(device_index=device_index)
+        else:
+            ok = restart_usb_camera_power(device_index=device_index)
+        if ok:
             print("[Camera] USB camera ready")
             return True
         print(f"[Camera] Not ready after attempt {attempt}/{attempts}")
-        if attempt < attempts:
-            print("[Camera] Cycling power OFF, then ON again...")
-            power_off_usb_camera()
-            time.sleep(CAMERA_POWER_CYCLE_SETTLE_S)
     return False
 
 
@@ -282,6 +342,7 @@ _usb_camera_worker = None
 
 def _open_usb_camera(device_index=0):
     """Open USB camera with Linux V4L2 backend to avoid GStreamer instability."""
+    _suppress_opencv_logs()
     idx = int(device_index)
     if sys.platform.startswith("linux"):
         with contextlib.redirect_stderr(io.StringIO()):
@@ -295,29 +356,6 @@ def _open_usb_camera(device_index=0):
     except Exception:
         pass
     return cap
-
-
-def _camera_ready(device_index=0, tries=10, wait_s=0.1):
-    """Best-effort camera readiness check with guaranteed release."""
-    cap = _open_usb_camera(device_index=device_index)
-    if cap is None:
-        return False
-    try:
-        for _ in range(max(1, int(tries))):
-            if sys.platform.startswith("linux"):
-                with contextlib.redirect_stderr(io.StringIO()):
-                    ok, frame = cap.read()
-            else:
-                ok, frame = cap.read()
-            if ok and frame is not None:
-                return True
-            time.sleep(float(wait_s))
-        return False
-    finally:
-        try:
-            cap.release()
-        except Exception:
-            pass
 
 
 def shutdown_all():
