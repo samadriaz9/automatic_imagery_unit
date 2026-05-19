@@ -336,8 +336,15 @@ try:
     x = input ('Enter to shift for incubation: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2600)
+    petri_dishes_up(2400)
     incubator_lid_down(500)
+
+    x = input ('Enter to start pictures: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(500) 
+    Camera_home()
+    Camera_up(3200)
     
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
