@@ -90,6 +90,10 @@ except ModuleNotFoundError:
 from incubation_module import keep_temperature_pid
 from imaging import start_imaging_capture_pattern
 
+# --- Imaging step sizes (edit here for trial-and-error) ---
+CAMERA_STEPSIZE = 100   # steps between each photo column (camera rail)
+PETRI_STEPSIZE = 100    # steps between each photo row (petri dish stage)
+
 try:
     from filteration_suction_pump import (
         filteration_suction_pump_on,
@@ -439,8 +443,8 @@ def _on_sigterm(signum, frame):
 signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
-try:
-    
+
+def run_workflow():
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
     Camera_home()
@@ -471,24 +475,32 @@ try:
     Camera_up(3800)
 
     x = input("Step 13: Enter to start pictures")
-    camera_relay_was_used = False
+    camera_session_started = False
     try:
-        camera_ready, camera_relay_was_used = ensure_usb_camera_ready(device_index=0)
+        camera_ready, _camera_relay_was_used = ensure_usb_camera_ready(device_index=0)
         if not camera_ready:
             print(
                 f"[Camera] Failed after {CAMERA_POWER_ON_ATTEMPTS} power-on attempts "
                 "— skipping imaging"
             )
-            return_all_home_positions(pulse_camera_off=camera_relay_was_used)
+            return_all_home_positions(pulse_camera_off=True)
         else:
-            print("Starting imaging capture pattern")
-            start_imaging_capture_pattern()
+            camera_session_started = True
+            print(
+                f"Starting imaging (7x7), camera stepsize={CAMERA_STEPSIZE}, "
+                f"petri stepsize={PETRI_STEPSIZE}"
+            )
+            start_imaging_capture_pattern(
+                camera_step_per_col=CAMERA_STEPSIZE,
+                petri_step_per_row=PETRI_STEPSIZE,
+            )
             time.sleep(0.5)
             print("Imaging capture pattern completed")
     except Exception as e:
         print(f"Imaging failed: {e}")
     finally:
-        if camera_relay_was_used:
+        if camera_session_started:
+            print("[Camera] Switching camera off after imaging")
             power_off_usb_camera()
     incubator_lid_home()
     petri_dishes_home()
@@ -497,9 +509,12 @@ try:
 
     x = input ('Step 15: Enter to Steriliz: ')
 
-except KeyboardInterrupt:
-    print("\nInterrupted (Ctrl+C).")
 
-finally:
-    stop_usb_camera_thread(_usb_camera_worker)
-    shutdown_all()
+if __name__ == "__main__":
+    try:
+        run_workflow()
+    except KeyboardInterrupt:
+        print("\nInterrupted (Ctrl+C).")
+    finally:
+        stop_usb_camera_thread(_usb_camera_worker)
+        shutdown_all()
