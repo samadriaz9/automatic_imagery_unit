@@ -342,9 +342,9 @@ try:
     x = input ('Enter to start pictures: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(600) 
+    petri_dishes_up(700) 
     Camera_home()
-    Camera_up(3400)
+    Camera_up(3700)
     
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
