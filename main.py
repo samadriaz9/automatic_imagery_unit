@@ -92,7 +92,7 @@ from imaging import start_imaging_capture_pattern
 
 # --- Imaging step sizes (edit here for trial-and-error) ---
 CAMERA_STEPSIZE = 96   # steps between each photo column (camera rail)
-PETRI_STEPSIZE = 80   # steps between each photo row (petri dish stage)
+PETRI_STEPSIZE = 60   # steps between each photo row (petri dish stage)
 
 try:
     from filteration_suction_pump import (
