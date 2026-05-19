@@ -92,7 +92,7 @@ from imaging import start_imaging_capture_pattern
 
 # --- Imaging step sizes (edit here for trial-and-error) ---
 CAMERA_STEPSIZE = 96   # steps between each photo column (camera rail)
-PETRI_STEPSIZE = 96   # steps between each photo row (petri dish stage)
+PETRI_STEPSIZE = 105   # steps between each photo row (petri dish stage)
 
 try:
     from filteration_suction_pump import (
@@ -451,7 +451,7 @@ def run_workflow():
     petri_dishes_home()
     petri_dishes_up(700) 
     Camera_home()
-    Camera_up(3800)
+    Camera_up(3730)
 
     x = input("Step 13: Enter to start pictures")
     camera_session_started = False
