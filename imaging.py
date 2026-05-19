@@ -224,7 +224,7 @@ def start_imaging_capture_pattern(
     experiment_dir=None,
     stage_subdir=None,
     camera_device_index=0,
-    rows=7,
+    rows=4,
     cols=7,
     camera_step_per_col=85,
     petri_step_per_row=85,
@@ -250,7 +250,7 @@ def start_imaging_capture_pattern(
     - Shift to the next row by moving petri dishes towards "up".
     - Optionally reset camera back to column 0 after each row (needed to keep a square coverage area).
 
-    Capture grid is ``rows``×``cols`` (default 7×7). ``mosaic.jpg`` is a full ``rows``×``cols`` stitch
+    Capture grid is ``rows``×``cols`` (default 4×7 = 28 tiles). ``mosaic.jpg`` is a full ``rows``×``cols`` stitch
     (axis swap + flip Y for this rig). After assembly, ``mosaic_crop_top_px`` pixels are removed
     from the top and ``mosaic_crop_right_px`` from the right (default 600 each). Set both to 0 for
     no trim. ``mosaic_center_fraction`` uses only the center fraction of each tile before placing
@@ -288,12 +288,31 @@ def start_imaging_capture_pattern(
         if bool(square_grid):
             petri_step_per_row = int(camera_step_per_col)
 
+        total_tiles = int(rows) * int(cols)
         image_idx = 1
         for r in range(int(rows)):
             for c in range(int(cols)):
                 img_name = f"{image_idx}.jpg"
                 out_path = os.path.join(output_dir, img_name)
-                _capture_frame(cap, out_path, square_crop=bool(square_crop))
+                print(f"[Imaging] Capture {image_idx}/{total_tiles} (row {r + 1}, col {c + 1})")
+                try:
+                    _capture_frame(cap, out_path, square_crop=bool(square_crop))
+                except Exception as exc:
+                    # USB stream can glitch after stepper motion; reopen once and retry.
+                    print(f"[Imaging] Retry after capture error at ({r}, {c}): {exc}")
+                    try:
+                        cap.release()
+                    except Exception:
+                        pass
+                    if sys.platform.startswith("linux"):
+                        cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+                    else:
+                        cap = cv2.VideoCapture(idx)
+                    if not cap.isOpened():
+                        raise RuntimeError(
+                            f"Could not reopen USB camera index {idx} after capture failure"
+                        ) from exc
+                    _capture_frame(cap, out_path, square_crop=bool(square_crop))
                 image_idx += 1
                 time.sleep(settle_seconds)
 

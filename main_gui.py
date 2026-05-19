@@ -2365,6 +2365,10 @@ class ExperimentApp:
                     camera_device_index=cam_idx,
                     experiment_dir=experiment_dir,
                     stage_subdir=stage_subdir,
+                    rows=4,
+                    cols=7,
+                    camera_step_per_col=85,
+                    settle_seconds=0.3,
                 )
                 imaging_ok = True
                 break

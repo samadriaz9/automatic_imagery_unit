@@ -333,7 +333,11 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 atexit.register(shutdown_all)
 
 try:
-    
+    x = input ('Enter to shift for incubation: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(2600)
+    incubator_lid_down(500)
     
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
@@ -351,7 +355,7 @@ try:
     x = input ('Enter to shift for incubation: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2700)
+    petri_dishes_up(2400)
     incubator_lid_down(400)
 
     x = input ('Enter to start incubation: ')
