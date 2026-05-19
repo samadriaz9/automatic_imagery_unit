@@ -29,8 +29,16 @@ def _ensure_dir(path):
     return path
 
 
-def _next_exp_dir(output_root="."):
+def data_root():
+    """Project ``data/`` folder next to the code (created if missing)."""
+    base = os.path.dirname(os.path.abspath(__file__))
+    return _ensure_dir(os.path.join(base, "data"))
+
+
+def _next_exp_dir(output_root=None):
     """Create and return next sequential experiment folder: exp_01, exp_02, ..."""
+    if output_root is None:
+        output_root = data_root()
     output_root = _ensure_dir(output_root)
     idx = 1
     while True:
@@ -220,7 +228,7 @@ def _write_mosaic(output_dir, mosaic, mosaic_name):
 
 
 def start_imaging_capture_pattern(
-    output_root=".",
+    output_root=None,
     experiment_dir=None,
     stage_subdir=None,
     camera_device_index=0,

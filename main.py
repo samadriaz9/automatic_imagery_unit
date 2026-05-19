@@ -88,7 +88,7 @@ except ModuleNotFoundError:
     consumable_cleanup = _missing_cleanup
 
 from incubation_module import keep_temperature_pid
-from imaging import start_imaging_capture_pattern
+from imaging import data_root, start_imaging_capture_pattern
 
 # --- Imaging grid (edit here for trial-and-error) ---
 IMAGING_ROWS = 8
@@ -471,14 +471,15 @@ def run_workflow():
                 f"Starting imaging ({IMAGING_ROWS}x{IMAGING_COLS}), "
                 f"camera stepsize={CAMERA_STEPSIZE}, petri stepsize={PETRI_STEPSIZE}"
             )
-            start_imaging_capture_pattern(
+            out_dir = start_imaging_capture_pattern(
+                output_root=data_root(),
                 rows=IMAGING_ROWS,
                 cols=IMAGING_COLS,
                 camera_step_per_col=CAMERA_STEPSIZE,
                 petri_step_per_row=PETRI_STEPSIZE,
             )
             time.sleep(0.5)
-            print("Imaging capture pattern completed")
+            print(f"Imaging capture pattern completed — saved under: {out_dir}")
     except Exception as e:
         print(f"Imaging failed: {e}")
     finally:

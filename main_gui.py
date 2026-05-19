@@ -102,7 +102,7 @@ def _missing_cleanup(*_args, **_kwargs):
 
 
 from camera_module import Camera_home, Camera_up, Camera_down, cleanup as camera_cleanup
-from imaging import start_imaging_capture_pattern
+from imaging import data_root, start_imaging_capture_pattern
 from incubator_lid import incubator_lid_home, incubator_lid_up, incubator_lid_down, cleanup as incubator_lid_cleanup
 from relay_control import P1, run_relay, set_relay, cleanup as relay_cleanup
 
@@ -1722,7 +1722,7 @@ class ExperimentApp:
     def _run_incubate_and_picture_worker(self, profiles):
         try:
             self.write_log("Running combined flow: Shift -> Incubate -> Picture")
-            exp_dir = self._create_next_experiment_dir(".")
+            exp_dir = self._create_next_experiment_dir(data_root())
             self.write_log(f"Experiment image root: {exp_dir}")
             for idx, (target_temp, minutes) in enumerate(profiles, start=1):
                 self.write_log(f"Stage {idx}: shift to incubation region")
@@ -1779,7 +1779,9 @@ class ExperimentApp:
             self.write_log(f"ERROR: {exc}")
             self.root.after(0, lambda: self.set_busy(False, "Error occurred during waste solenoid pulse."))
 
-    def _create_next_experiment_dir(self, output_root="."):
+    def _create_next_experiment_dir(self, output_root=None):
+        if output_root is None:
+            output_root = data_root()
         os.makedirs(output_root, exist_ok=True)
         idx = 1
         while True:
