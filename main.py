@@ -178,9 +178,13 @@ import RPi.GPIO as GPIO
 CAMERA_RELAY_GPIO = 25
 CAMERA_RELAY_ACTIVE = GPIO.LOW
 CAMERA_RELAY_INACTIVE = GPIO.HIGH
+CAMERA_RELAY_PULSE_S = 4.0
+CAMERA_BOOT_WAIT_S = 10.0
+CAMERA_READY_TIMEOUT_S = 30.0
+CAMERA_READY_POLL_S = 0.5
 
 
-def pulse_camera_relay(seconds=4.0):
+def pulse_camera_relay(seconds=CAMERA_RELAY_PULSE_S):
     """Pulse camera relay for `seconds`, then return pin to input (release)."""
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
@@ -193,6 +197,38 @@ def pulse_camera_relay(seconds=4.0):
         GPIO.setup(CAMERA_RELAY_GPIO, GPIO.IN)
     except Exception:
         pass
+
+
+def power_on_usb_camera(device_index=0):
+    """
+    Toggle camera power ON (relay pulse), wait for USB boot, then verify stream.
+    Assumes camera starts powered off before imaging.
+    """
+    print(f"[Camera] Relay ON pulse ({CAMERA_RELAY_PULSE_S:.0f}s)...")
+    pulse_camera_relay(CAMERA_RELAY_PULSE_S)
+    print(f"[Camera] Waiting {CAMERA_BOOT_WAIT_S:.0f}s for USB boot...")
+    time.sleep(CAMERA_BOOT_WAIT_S)
+    if _wait_for_camera_ready(device_index=device_index):
+        print("[Camera] USB camera ready")
+        return True
+    print("[Camera] USB camera not ready after power-on")
+    return False
+
+
+def power_off_usb_camera():
+    """Toggle camera power OFF (relay pulse)."""
+    print(f"[Camera] Relay OFF pulse ({CAMERA_RELAY_PULSE_S:.0f}s)...")
+    pulse_camera_relay(CAMERA_RELAY_PULSE_S)
+
+
+def _wait_for_camera_ready(device_index=0, timeout_s=CAMERA_READY_TIMEOUT_S, poll_s=CAMERA_READY_POLL_S):
+    """Poll until USB camera delivers a frame or timeout."""
+    deadline = time.time() + max(0.0, float(timeout_s))
+    while time.time() < deadline:
+        if _camera_ready(device_index=device_index, tries=3, wait_s=0.1):
+            return True
+        time.sleep(max(0.05, float(poll_s)))
+    return False
 
 # --- Run once: stops PWM/relays/solenoid and releases GPIO (helps avoid drivers heating when idle) ---
 _shutdown_done = False
@@ -302,8 +338,8 @@ try:
     x = input ('Enter to shift for incubation: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(200)
+    petri_dishes_up(2700)
+    incubator_lid_down(400)
 
     x = input ('Enter to start incubation: ')
     keep_temperature_pid(37, 1)
@@ -311,44 +347,30 @@ try:
     x = input ('Enter to start pictures: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(500)
+    petri_dishes_up(500) 
     Camera_home()
     Camera_up(3200)
 
-    x  = input ("Step 13: Enter to start pictures")
+    x = input("Step 13: Enter to start pictures")
+    camera_powered = False
     try:
-        ok = _camera_ready(device_index=0, tries=2, wait_s=0.05)
-        if ok:
-            print("camera on")
+        if not power_on_usb_camera(device_index=0):
+            print("Camera not available — skipping imaging capture")
         else:
-            pulse_camera_relay(4)
-            time.sleep(10)
-            print("camera switched on")
+            camera_powered = True
+            print("Starting imaging capture pattern")
+            start_imaging_capture_pattern()
+            time.sleep(0.5)
+            print("Imaging capture pattern completed")
     except Exception as e:
-        print(f"Camera not found")
-        sys.exit(1)
-    ok = False
-    for i in range(10):
-        if _camera_ready(device_index=0, tries=1, wait_s=0.05):
-            print("camera on")
-            ok = True
-            break
-        else:
-            print("camera off")
-            time.sleep(0.1)
-    if ok:
-        print("Starting imaging capture pattern")
-        start_imaging_capture_pattern()
-        time.sleep(0.5)
-        print("Imaging capture pattern completed")
-    else:
-        print("camera not on")
+        print(f"Imaging failed: {e}")
+    finally:
+        if camera_powered:
+            power_off_usb_camera()
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2400)
     incubator_lid_down(300)
-    pulse_camera_relay(4)
-    time.sleep(2)
 
     x = input ('Step 15: Enter to Steriliz: ')
 
