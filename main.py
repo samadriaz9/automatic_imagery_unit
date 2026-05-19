@@ -265,26 +265,44 @@ def _usb_camera_probe(device_index=0, read_tries=3, wait_s=0.15):
     return last
 
 
-def _check_camera_after_boot(device_index=0):
-    """After boot wait, try opening the camera; restart power if V4L2 cannot open."""
+def _poll_usb_camera(device_index=0, label="Readiness"):
+    """
+    Try opening the camera several times (no relay).
+
+    Returns True when a frame is received. On V4L2 open failure, returns False
+    immediately so the caller can run a relay power cycle.
+    """
     checks = max(1, int(CAMERA_BOOT_POST_CHECKS))
     interval = max(0.0, float(CAMERA_BOOT_CHECK_INTERVAL_S))
     idx = int(device_index)
     for n in range(1, checks + 1):
-        print(f"[Camera] Readiness check {n}/{checks} (/dev/video{idx})...")
+        print(f"[Camera] {label} check {n}/{checks} (/dev/video{idx})...")
         status = _usb_camera_probe(device_index=idx, read_tries=2, wait_s=0.1)
         if status == "ready":
             return True
         if status == "open_failed":
             print(
-                f"[Camera] V4L2: can't open camera by index (/dev/video{idx}) — "
-                "will restart camera power (relay OFF, then ON)"
+                f"[Camera] V4L2: can't open camera by index (/dev/video{idx})"
             )
             return False
         print("[Camera] Device opened but no frame yet, retrying...")
         if n < checks:
             time.sleep(interval)
     return False
+
+
+def _camera_already_usable(device_index=0):
+    """True if the USB camera works now — avoids toggle relay when already on."""
+    print("[Camera] Checking if camera is already on (no relay toggle)...")
+    if _poll_usb_camera(device_index=device_index, label="Direct"):
+        print("[Camera] Camera already on — proceeding to capture")
+        return True
+    return False
+
+
+def _check_camera_after_boot(device_index=0):
+    """After relay ON + boot wait, poll until the camera streams."""
+    return _poll_usb_camera(device_index=device_index, label="Post-boot")
 
 
 def restart_usb_camera_power(device_index=0):
@@ -306,30 +324,44 @@ def _power_cycle_camera_on(device_index=0):
 
 def ensure_usb_camera_ready(device_index=0, max_attempts=CAMERA_POWER_ON_ATTEMPTS):
     """
-    Try up to ``max_attempts`` times: power on, wait 10 s, check camera repeatedly.
-    If V4L2 cannot open /dev/videoN, restart camera power immediately (OFF then ON).
+    Ensure USB camera is ready for capture.
+
+    Returns:
+        (ready, relay_power_was_used)
+        relay_power_was_used is True only if a relay pulse was used to turn power on;
+        then the caller should pulse relay off after imaging. If the camera was
+        already on, no relay is toggled (avoids confusing ON/OFF on toggle wiring).
     """
+    if _camera_already_usable(device_index=device_index):
+        return True, False
+
+    print("[Camera] Camera not available yet — trying relay power cycle...")
     attempts = max(1, int(max_attempts))
     for attempt in range(1, attempts + 1):
         print(f"[Camera] Power-on attempt {attempt}/{attempts}")
         if attempt == 1:
             ok = _power_cycle_camera_on(device_index=device_index)
         else:
+            print(
+                "[Camera] Will restart camera power (relay OFF, then ON) "
+                "after open failure"
+            )
             ok = restart_usb_camera_power(device_index=device_index)
         if ok:
             print("[Camera] USB camera ready")
-            return True
+            return True, True
         print(f"[Camera] Not ready after attempt {attempt}/{attempts}")
-    return False
+    return False, False
 
 
-def return_all_home_positions():
+def return_all_home_positions(pulse_camera_off=False):
     """Homing recovery when the USB camera cannot be opened after all retries."""
     print("[Recovery] Returning all modules to home positions...")
-    try:
-        power_off_usb_camera()
-    except Exception as exc:
-        print(f"[Recovery] Camera power-off warning: {exc}")
+    if pulse_camera_off:
+        try:
+            power_off_usb_camera()
+        except Exception as exc:
+            print(f"[Recovery] Camera power-off warning: {exc}")
     Camera_home()
     incubator_lid_home()
     petri_dishes_home()
@@ -439,16 +471,16 @@ try:
     Camera_up(3800)
 
     x = input("Step 13: Enter to start pictures")
-    camera_powered = False
+    camera_relay_was_used = False
     try:
-        if not ensure_usb_camera_ready(device_index=0):
+        camera_ready, camera_relay_was_used = ensure_usb_camera_ready(device_index=0)
+        if not camera_ready:
             print(
                 f"[Camera] Failed after {CAMERA_POWER_ON_ATTEMPTS} power-on attempts "
                 "— skipping imaging"
             )
-            return_all_home_positions()
+            return_all_home_positions(pulse_camera_off=camera_relay_was_used)
         else:
-            camera_powered = True
             print("Starting imaging capture pattern")
             start_imaging_capture_pattern()
             time.sleep(0.5)
@@ -456,7 +488,7 @@ try:
     except Exception as e:
         print(f"Imaging failed: {e}")
     finally:
-        if camera_powered:
+        if camera_relay_was_used:
             power_off_usb_camera()
     incubator_lid_home()
     petri_dishes_home()
