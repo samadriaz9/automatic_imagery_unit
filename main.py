@@ -524,9 +524,7 @@ def run_workflow():
             exp_dir = start_multi_petri_imaging(
                 num_petri_dishes=num_petri,
                 output_root=data_root(),
-                petri_dish_pre_up=PETRI_DISH_PRE_UP,
-                camera_dish_pre_up=CAMERA_DISH_PRE_UP,
-                petri_offset_per_dish=PETRI_STEPSIZE * IMAGING_ROWS,
+                petri_offset_per_dish=PETRI_STEPSIZE * 7,
                 camera_offset_per_dish=CAMERA_STEPSIZE,
                 rows=IMAGING_ROWS,
                 cols=IMAGING_COLS,
