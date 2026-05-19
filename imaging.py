@@ -372,3 +372,101 @@ def start_imaging_capture_pattern(
     finally:
         cap.release()
 
+
+def petri_dish_subdir(dish_number):
+    """Subfolder name for one petri dish inside an experiment (1-based)."""
+    return f"petri_{int(dish_number):02d}"
+
+
+def start_multi_petri_imaging(
+    num_petri_dishes=1,
+    output_root=None,
+    experiment_dir=None,
+    petri_dish_pre_up=740,
+    camera_dish_pre_up=3730,
+    petri_offset_per_dish=None,
+    camera_offset_per_dish=None,
+    rows=8,
+    cols=8,
+    camera_step_per_col=85,
+    petri_step_per_row=85,
+    settle_seconds=0.15,
+    **capture_kwargs,
+):
+    """
+    Run the same capture grid on 1–10 petri dishes in a tray (2×5 layout).
+
+    Dish 1 uses the current stage/camera position. Each further dish is reached by
+    re-homing, returning to the dish-1 pre-position, then moving:
+
+      petri_dishes_down(petri_offset_per_dish × (dish − 1))
+      Camera_down(camera_offset_per_dish × (dish − 1))
+
+    Defaults: petri offset = ``petri_step_per_row × rows``,
+              camera offset = ``camera_step_per_col``.
+
+    One dish  → images in ``data/exp_XX/`` (no subfolder).
+    N dishes  → ``data/exp_XX/petri_01/`` … ``petri_NN/``.
+
+    Returns:
+        Experiment directory path (parent of all petri subfolders).
+    """
+    from camera_module import Camera_home, Camera_up, Camera_down
+    from petri_dishes import petri_dishes_home, petri_dishes_up, petri_dishes_down
+
+    num = max(1, min(10, int(num_petri_dishes)))
+    row_step = int(petri_step_per_row)
+    col_step = int(camera_step_per_col)
+    grid_rows = int(rows)
+    petri_off = int(petri_offset_per_dish if petri_offset_per_dish is not None else row_step * grid_rows)
+    cam_off = int(camera_offset_per_dish if camera_offset_per_dish is not None else col_step)
+
+    if experiment_dir:
+        exp_dir = _ensure_dir(experiment_dir)
+    else:
+        exp_dir = _next_exp_dir(output_root)
+
+    print(
+        f"[Imaging] Multi-petri run: {num} dish(es), exp={exp_dir}, "
+        f"offset per dish (petri={petri_off}, camera={cam_off})"
+    )
+
+    pattern_kw = {
+        "rows": grid_rows,
+        "cols": int(cols),
+        "camera_step_per_col": col_step,
+        "petri_step_per_row": row_step,
+        "settle_seconds": float(settle_seconds),
+    }
+    pattern_kw.update(capture_kwargs)
+
+    for dish in range(1, num + 1):
+        print(f"[Imaging] ===== Petri dish {dish} / {num} =====")
+        if dish > 1:
+            print(
+                f"[Imaging] Move to dish {dish} start from dish 1 reference "
+                f"(petri DOWN {petri_off * (dish - 1)}, camera DOWN {cam_off * (dish - 1)})"
+            )
+            Camera_home()
+            Camera_up(int(camera_dish_pre_up))
+            petri_dishes_home()
+            petri_dishes_up(int(petri_dish_pre_up))
+            steps_p = petri_off * (dish - 1)
+            steps_c = cam_off * (dish - 1)
+            if steps_p > 0:
+                petri_dishes_down(steps_p)
+            if steps_c > 0:
+                Camera_down(steps_c)
+            time.sleep(float(settle_seconds))
+
+        subdir = petri_dish_subdir(dish) if num > 1 else None
+        out = start_imaging_capture_pattern(
+            output_root=output_root,
+            experiment_dir=exp_dir,
+            stage_subdir=subdir,
+            **pattern_kw,
+        )
+        print(f"[Imaging] Dish {dish} saved: {out}")
+
+    return exp_dir
+
