@@ -246,7 +246,8 @@ def start_imaging_capture_pattern(
     - Current petri stage position is the start-of-grid for row 0.
 
     Motion:
-    - Slide across each row by moving camera towards "up" for each next column.
+    - Slide across each row by moving camera DOWN for each next column (after pre-position
+      with Camera_up from home). Row end: petri dishes up, then camera UP back to column 0.
     - Shift to the next row by moving petri dishes towards "up".
     - Optionally reset camera back to column 0 after each row (needed to keep a square coverage area).
 
@@ -318,7 +319,7 @@ def start_imaging_capture_pattern(
 
                 # Move camera for next column in this row (except last col).
                 if c < cols - 1:
-                    Camera_up(int(camera_step_per_col))
+                    Camera_down(int(camera_step_per_col))
                     time.sleep(settle_seconds)
 
             # End-of-row reposition
@@ -331,7 +332,7 @@ def start_imaging_capture_pattern(
                 if bool(camera_reset_each_row):
                     back_steps = int((cols - 1) * camera_step_per_col)
                     if back_steps > 0:
-                        Camera_down(back_steps)
+                        Camera_up(back_steps)
                     time.sleep(settle_seconds)
 
         print(f"[Imaging] Capture complete: {output_dir}")
