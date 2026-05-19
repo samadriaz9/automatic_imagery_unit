@@ -224,7 +224,7 @@ def start_imaging_capture_pattern(
     experiment_dir=None,
     stage_subdir=None,
     camera_device_index=0,
-    rows=4,
+    rows=7,
     cols=7,
     camera_step_per_col=85,
     petri_step_per_row=85,
@@ -250,7 +250,7 @@ def start_imaging_capture_pattern(
     - Shift to the next row by moving petri dishes towards "up".
     - Optionally reset camera back to column 0 after each row (needed to keep a square coverage area).
 
-    Capture grid is ``rows``×``cols`` (default 4×7 = 28 tiles). ``mosaic.jpg`` is a full ``rows``×``cols`` stitch
+    Capture grid is ``rows``×``cols`` (default 7×7 = 49 tiles). ``mosaic.jpg`` is a full ``rows``×``cols`` stitch
     (axis swap + flip Y for this rig). After assembly, ``mosaic_crop_top_px`` pixels are removed
     from the top and ``mosaic_crop_right_px`` from the right (default 600 each). Set both to 0 for
     no trim. ``mosaic_center_fraction`` uses only the center fraction of each tile before placing
