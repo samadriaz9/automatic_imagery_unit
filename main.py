@@ -445,27 +445,6 @@ atexit.register(shutdown_all)
 
 
 def run_workflow():
-    x = input ('Enter to start all modules home: ')
-    print("Step 01: All modules home")
-    Camera_home()
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(300)
-
-    x = input ('Enter to keep petri dishes home: ')
-    print("Step 02: ")
-    incubator_lid_home()
-    petri_dishes_home()
-
-    x = input ('Enter to shift for incubation: ')
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(400)
-
-    x = input ('Enter to start incubation: ')
-    keep_temperature_pid(37, 1)
 
     x = input ('Enter to start pictures: ')
     incubator_lid_home()
@@ -508,6 +487,74 @@ def run_workflow():
     incubator_lid_down(300)
 
     x = input ('Step 15: Enter to Steriliz: ')
+
+
+
+
+
+    x = input ('Enter to start all modules home: ')
+    print("Step 01: All modules home")
+    Camera_home()
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(2400)
+    incubator_lid_down(300)
+
+    x = input ('Enter to keep petri dishes home: ')
+    print("Step 02: ")
+    incubator_lid_home()
+    petri_dishes_home()
+
+    x = input ('Enter to shift for incubation: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(2400)
+    incubator_lid_down(400)
+
+    x = input ('Enter to start incubation: ')
+    keep_temperature_pid(37, 1)
+
+    # x = input ('Enter to start pictures: ')
+    # incubator_lid_home()
+    # petri_dishes_home()
+    # petri_dishes_up(700) 
+    # Camera_home()
+    # Camera_up(3800)
+
+    # x = input("Step 13: Enter to start pictures")
+    # camera_session_started = False
+    # try:
+    #     camera_ready, _camera_relay_was_used = ensure_usb_camera_ready(device_index=0)
+    #     if not camera_ready:
+    #         print(
+    #             f"[Camera] Failed after {CAMERA_POWER_ON_ATTEMPTS} power-on attempts "
+    #             "— skipping imaging"
+    #         )
+    #         return_all_home_positions(pulse_camera_off=True)
+    #     else:
+    #         camera_session_started = True
+    #         print(
+    #             f"Starting imaging (7x7), camera stepsize={CAMERA_STEPSIZE}, "
+    #             f"petri stepsize={PETRI_STEPSIZE}"
+    #         )
+    #         start_imaging_capture_pattern(
+    #             camera_step_per_col=CAMERA_STEPSIZE,
+    #             petri_step_per_row=PETRI_STEPSIZE,
+    #         )
+    #         time.sleep(0.5)
+    #         print("Imaging capture pattern completed")
+    # except Exception as e:
+    #     print(f"Imaging failed: {e}")
+    # finally:
+    #     if camera_session_started:
+    #         print("[Camera] Switching camera off after imaging")
+    #         power_off_usb_camera()
+    # incubator_lid_home()
+    # petri_dishes_home()
+    # petri_dishes_up(2400)
+    # incubator_lid_down(300)
+
+    # x = input ('Step 15: Enter to Steriliz: ')
 
 
 if __name__ == "__main__":
