@@ -14,7 +14,9 @@ Filtration solenoid: GPIO 26 (BCM), pin 37 (see solinoid_value_to_filteration.py
 Shutdown: Ctrl+C runs full cleanup (see shutdown_all). SIGTERM (kill) also cleans up.
 """
 import atexit
+import contextlib
 import gc
+import io
 import signal
 import sys
 import time
@@ -180,8 +182,10 @@ CAMERA_RELAY_ACTIVE = GPIO.LOW
 CAMERA_RELAY_INACTIVE = GPIO.HIGH
 CAMERA_RELAY_PULSE_S = 4.0
 CAMERA_BOOT_WAIT_S = 10.0
-CAMERA_READY_TIMEOUT_S = 30.0
-CAMERA_READY_POLL_S = 0.5
+CAMERA_POWER_ON_ATTEMPTS = 3
+CAMERA_BOOT_POST_CHECKS = 6
+CAMERA_BOOT_CHECK_INTERVAL_S = 2.0
+CAMERA_POWER_CYCLE_SETTLE_S = 2.0
 
 
 def _setup_camera_relay_output():
@@ -212,36 +216,64 @@ def pulse_camera_relay(contact_seconds=CAMERA_RELAY_PULSE_S):
     _release_camera_relay_pin()
 
 
-def power_on_usb_camera(device_index=0):
-    """
-    Toggle camera ON (4 s relay pulse, pin released), wait for USB boot, verify stream.
-    Assumes camera starts powered off before imaging.
-    """
-    print(f"[Camera] Relay ON pulse ({CAMERA_RELAY_PULSE_S:.0f}s), pin released...")
-    pulse_camera_relay(CAMERA_RELAY_PULSE_S)
-    print(f"[Camera] Waiting {CAMERA_BOOT_WAIT_S:.0f}s for USB boot...")
-    time.sleep(CAMERA_BOOT_WAIT_S)
-    if _wait_for_camera_ready(device_index=device_index):
-        print("[Camera] USB camera ready")
-        return True
-    print("[Camera] USB camera not ready after power-on")
-    return False
-
-
 def power_off_usb_camera():
     """Toggle camera OFF (4 s relay pulse, pin released)."""
     print(f"[Camera] Relay OFF pulse ({CAMERA_RELAY_PULSE_S:.0f}s), pin released...")
     pulse_camera_relay(CAMERA_RELAY_PULSE_S)
 
 
-def _wait_for_camera_ready(device_index=0, timeout_s=CAMERA_READY_TIMEOUT_S, poll_s=CAMERA_READY_POLL_S):
-    """Poll until USB camera delivers a frame or timeout."""
-    deadline = time.time() + max(0.0, float(timeout_s))
-    while time.time() < deadline:
-        if _camera_ready(device_index=device_index, tries=3, wait_s=0.1):
+def _check_camera_after_boot(device_index=0):
+    """After boot wait, try opening the camera several times before giving up."""
+    checks = max(1, int(CAMERA_BOOT_POST_CHECKS))
+    interval = max(0.0, float(CAMERA_BOOT_CHECK_INTERVAL_S))
+    for n in range(1, checks + 1):
+        print(f"[Camera] Readiness check {n}/{checks}...")
+        if _camera_ready(device_index=device_index, tries=3, wait_s=0.15):
             return True
-        time.sleep(max(0.05, float(poll_s)))
+        if n < checks:
+            time.sleep(interval)
     return False
+
+
+def _power_cycle_camera_on(device_index=0):
+    """Relay ON pulse, wait for USB boot, then poll readiness."""
+    print(f"[Camera] Relay ON pulse ({CAMERA_RELAY_PULSE_S:.0f}s), pin released...")
+    pulse_camera_relay(CAMERA_RELAY_PULSE_S)
+    print(f"[Camera] Waiting {CAMERA_BOOT_WAIT_S:.0f}s for USB boot...")
+    time.sleep(CAMERA_BOOT_WAIT_S)
+    return _check_camera_after_boot(device_index=device_index)
+
+
+def ensure_usb_camera_ready(device_index=0, max_attempts=CAMERA_POWER_ON_ATTEMPTS):
+    """
+    Try up to ``max_attempts`` times: power on, wait 10 s, check camera repeatedly.
+    On failure (except last attempt): power off, pause, power on again.
+    """
+    attempts = max(1, int(max_attempts))
+    for attempt in range(1, attempts + 1):
+        print(f"[Camera] Power-on attempt {attempt}/{attempts}")
+        if _power_cycle_camera_on(device_index=device_index):
+            print("[Camera] USB camera ready")
+            return True
+        print(f"[Camera] Not ready after attempt {attempt}/{attempts}")
+        if attempt < attempts:
+            print("[Camera] Cycling power OFF, then ON again...")
+            power_off_usb_camera()
+            time.sleep(CAMERA_POWER_CYCLE_SETTLE_S)
+    return False
+
+
+def return_all_home_positions():
+    """Homing recovery when the USB camera cannot be opened after all retries."""
+    print("[Recovery] Returning all modules to home positions...")
+    try:
+        power_off_usb_camera()
+    except Exception as exc:
+        print(f"[Recovery] Camera power-off warning: {exc}")
+    Camera_home()
+    incubator_lid_home()
+    petri_dishes_home()
+    print("[Recovery] All modules homed.")
 
 # --- Run once: stops PWM/relays/solenoid and releases GPIO (helps avoid drivers heating when idle) ---
 _shutdown_done = False
@@ -252,7 +284,8 @@ def _open_usb_camera(device_index=0):
     """Open USB camera with Linux V4L2 backend to avoid GStreamer instability."""
     idx = int(device_index)
     if sys.platform.startswith("linux"):
-        cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+        with contextlib.redirect_stderr(io.StringIO()):
+            cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
     else:
         cap = cv2.VideoCapture(idx)
     if not cap.isOpened():
@@ -271,7 +304,11 @@ def _camera_ready(device_index=0, tries=10, wait_s=0.1):
         return False
     try:
         for _ in range(max(1, int(tries))):
-            ok, frame = cap.read()
+            if sys.platform.startswith("linux"):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    ok, frame = cap.read()
+            else:
+                ok, frame = cap.read()
             if ok and frame is not None:
                 return True
             time.sleep(float(wait_s))
@@ -366,8 +403,12 @@ try:
     x = input("Step 13: Enter to start pictures")
     camera_powered = False
     try:
-        if not power_on_usb_camera(device_index=0):
-            print("Camera not available — skipping imaging capture")
+        if not ensure_usb_camera_ready(device_index=0):
+            print(
+                f"[Camera] Failed after {CAMERA_POWER_ON_ATTEMPTS} power-on attempts "
+                "— skipping imaging"
+            )
+            return_all_home_positions()
         else:
             camera_powered = True
             print("Starting imaging capture pattern")
