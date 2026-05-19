@@ -184,27 +184,40 @@ CAMERA_READY_TIMEOUT_S = 30.0
 CAMERA_READY_POLL_S = 0.5
 
 
-def pulse_camera_relay(seconds=CAMERA_RELAY_PULSE_S):
-    """Pulse camera relay for `seconds`, then return pin to input (release)."""
+def _setup_camera_relay_output():
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(CAMERA_RELAY_GPIO, GPIO.OUT, initial=CAMERA_RELAY_INACTIVE)
-    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_ACTIVE)
-    time.sleep(max(0.0, float(seconds)))
-    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
-    # Release pin so it is not actively driven after pulse.
+
+
+def _release_camera_relay_pin():
+    """Stop driving the relay line (relay board / latch holds camera state)."""
     try:
         GPIO.setup(CAMERA_RELAY_GPIO, GPIO.IN)
     except Exception:
         pass
 
 
+def pulse_camera_relay(contact_seconds=CAMERA_RELAY_PULSE_S):
+    """
+    Momentary relay contact then release GPIO (toggle / latch wiring).
+
+    Active-low: LOW for contact_seconds, return to HIGH, then set pin INPUT so
+    the coil is not held energized. Same pulse toggles camera ON or OFF.
+    """
+    _setup_camera_relay_output()
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_ACTIVE)
+    time.sleep(max(0.0, float(contact_seconds)))
+    GPIO.output(CAMERA_RELAY_GPIO, CAMERA_RELAY_INACTIVE)
+    _release_camera_relay_pin()
+
+
 def power_on_usb_camera(device_index=0):
     """
-    Toggle camera power ON (relay pulse), wait for USB boot, then verify stream.
+    Toggle camera ON (4 s relay pulse, pin released), wait for USB boot, verify stream.
     Assumes camera starts powered off before imaging.
     """
-    print(f"[Camera] Relay ON pulse ({CAMERA_RELAY_PULSE_S:.0f}s)...")
+    print(f"[Camera] Relay ON pulse ({CAMERA_RELAY_PULSE_S:.0f}s), pin released...")
     pulse_camera_relay(CAMERA_RELAY_PULSE_S)
     print(f"[Camera] Waiting {CAMERA_BOOT_WAIT_S:.0f}s for USB boot...")
     time.sleep(CAMERA_BOOT_WAIT_S)
@@ -216,8 +229,8 @@ def power_on_usb_camera(device_index=0):
 
 
 def power_off_usb_camera():
-    """Toggle camera power OFF (relay pulse)."""
-    print(f"[Camera] Relay OFF pulse ({CAMERA_RELAY_PULSE_S:.0f}s)...")
+    """Toggle camera OFF (4 s relay pulse, pin released)."""
+    print(f"[Camera] Relay OFF pulse ({CAMERA_RELAY_PULSE_S:.0f}s), pin released...")
     pulse_camera_relay(CAMERA_RELAY_PULSE_S)
 
 
