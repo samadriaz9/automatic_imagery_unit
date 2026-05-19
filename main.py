@@ -90,9 +90,11 @@ except ModuleNotFoundError:
 from incubation_module import keep_temperature_pid
 from imaging import start_imaging_capture_pattern
 
-# --- Imaging step sizes (edit here for trial-and-error) ---
+# --- Imaging grid (edit here for trial-and-error) ---
+IMAGING_ROWS = 8
+IMAGING_COLS = 8
 CAMERA_STEPSIZE = 95   # steps between each photo column (camera rail)
-PETRI_STEPSIZE = 76  # steps between each photo row (petri dish stage)
+PETRI_STEPSIZE = 76    # steps between each photo row (petri dish stage)
 
 try:
     from filteration_suction_pump import (
@@ -466,10 +468,12 @@ def run_workflow():
         else:
             camera_session_started = True
             print(
-                f"Starting imaging (7x7), camera stepsize={CAMERA_STEPSIZE}, "
-                f"petri stepsize={PETRI_STEPSIZE}"
+                f"Starting imaging ({IMAGING_ROWS}x{IMAGING_COLS}), "
+                f"camera stepsize={CAMERA_STEPSIZE}, petri stepsize={PETRI_STEPSIZE}"
             )
             start_imaging_capture_pattern(
+                rows=IMAGING_ROWS,
+                cols=IMAGING_COLS,
                 camera_step_per_col=CAMERA_STEPSIZE,
                 petri_step_per_row=PETRI_STEPSIZE,
             )
