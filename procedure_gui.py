@@ -72,14 +72,17 @@ LEFT_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))  # left step buttons (height ×1.3 
 LEFT_BTN_WIDTH_SCALE = 1.4
 LEFT_PANEL_MIN_WIDTH = int(round(180 * LEFT_BTN_WIDTH_SCALE))
 CENTER_PANEL_WIDTH = 400
-RIGHT_PANEL_MIN_WIDTH = 340
+RIGHT_PANEL_MIN_WIDTH = 380
 STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))
 STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
 STUDY_BTN_FONT = ("Segoe UI", 14, "bold")
 STUDY_BTN_RADIUS = 12
-ROUND_ADJ_BTN_HEIGHT = 40
-ROUND_ADJ_BTN_WIDTH = 52
-ROUND_ADJ_BTN_FONT = ("Segoe UI", 11, "bold")
+ROUND_ADJ_BTN_HEIGHT = 80
+ROUND_ADJ_BTN_WIDTH = 104
+ROUND_ADJ_BTN_FONT = ("Segoe UI", 22, "bold")
+ROUND_ADJ_BTN_RADIUS = 16
+ROUND_VALUE_FONT = ("Segoe UI", 20, "bold")
+ROUND_UNIT_FONT = ("Segoe UI", 16)
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
 ROUND_TIME_BTN_COLOR = "#d35400"
@@ -299,7 +302,7 @@ class ProcedureGUI:
         )
 
     def _round_temp_btn(self, parent, text, command):
-        return self._adj_btn(
+        return self._mk_round_btn(
             parent,
             text,
             command,
@@ -308,11 +311,13 @@ class ProcedureGUI:
             fg=TEXT_ON_COLOR,
             height=ROUND_ADJ_BTN_HEIGHT,
             font=ROUND_ADJ_BTN_FONT,
+            radius=ROUND_ADJ_BTN_RADIUS,
+            stretch=False,
             min_width=ROUND_ADJ_BTN_WIDTH,
         )
 
     def _round_time_btn(self, parent, text, command):
-        return self._adj_btn(
+        return self._mk_round_btn(
             parent,
             text,
             command,
@@ -321,6 +326,8 @@ class ProcedureGUI:
             fg=TEXT_ON_COLOR,
             height=ROUND_ADJ_BTN_HEIGHT,
             font=ROUND_ADJ_BTN_FONT,
+            radius=ROUND_ADJ_BTN_RADIUS,
+            stretch=False,
             min_width=ROUND_ADJ_BTN_WIDTH,
         )
 
@@ -459,30 +466,33 @@ class ProcedureGUI:
             command=self._refresh_round_highlight,
         ).pack(side=tk.RIGHT)
 
-        trow = tk.Frame(block, bg=PANEL)
-        trow.pack(fill=tk.X, pady=(4, 2))
+        ctrl_box = tk.Frame(block, bg=PANEL)
+        ctrl_box.pack(fill=tk.X, pady=(6, 0))
+
+        trow = tk.Frame(ctrl_box, bg=PANEL)
+        trow.pack(anchor="center", pady=(0, 8))
         self._round_temp_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(
-            side=tk.LEFT, padx=(0, 4)
+            side=tk.LEFT, padx=(0, 8)
         )
-        tk.Label(trow, textvariable=temp_var, bg=PANEL, fg=ACCENT, font=VALUE_FONT, width=3).pack(
-            side=tk.LEFT, padx=4
-        )
-        tk.Label(trow, text="°C", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
+        tk.Label(
+            trow, textvariable=temp_var, bg=PANEL, fg=ACCENT, font=ROUND_VALUE_FONT, width=4
+        ).pack(side=tk.LEFT, padx=8)
+        tk.Label(trow, text="°C", bg=PANEL, fg=MUTED, font=ROUND_UNIT_FONT).pack(side=tk.LEFT)
         self._round_temp_btn(trow, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(
-            side=tk.LEFT, padx=(4, 0)
+            side=tk.LEFT, padx=(8, 0)
         )
 
-        mrow = tk.Frame(block, bg=PANEL)
-        mrow.pack(fill=tk.X)
+        mrow = tk.Frame(ctrl_box, bg=PANEL)
+        mrow.pack(anchor="center")
         self._round_time_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(
-            side=tk.LEFT, padx=(0, 4)
+            side=tk.LEFT, padx=(0, 8)
         )
-        tk.Label(mrow, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=VALUE_FONT, width=3).pack(
-            side=tk.LEFT, padx=4
-        )
-        tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
+        tk.Label(
+            mrow, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=ROUND_VALUE_FONT, width=4
+        ).pack(side=tk.LEFT, padx=8)
+        tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=ROUND_UNIT_FONT).pack(side=tk.LEFT)
         self._round_time_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(
-            side=tk.LEFT, padx=(4, 0)
+            side=tk.LEFT, padx=(8, 0)
         )
 
     def _set_frame_bg(self, widget, bg):
