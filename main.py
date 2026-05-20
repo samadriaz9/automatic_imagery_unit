@@ -96,9 +96,13 @@ IMAGING_COLS = 8
 CAMERA_STEPSIZE = 95   # steps between each photo column (camera rail)
 PETRI_STEPSIZE = 76    # steps between each photo row (petri dish stage)
 
-# Pre-position before dish 1 scan (after petri_dishes_home / Camera_home)
+# Pre-position row 1 before dish 1 scan (after petri_dishes_home / Camera_home)
 PETRI_DISH_PRE_UP = 740
 CAMERA_DISH_PRE_UP = 3730
+
+# Pre-position row 2 (petri 6–10): home both, then these steps (same pattern as row 1 but different petri height)
+PETRI_DISH_PRE_UP_ROW2 = 1400
+CAMERA_DISH_PRE_UP_ROW2 = 3730
 
 # Tray layout: 2 rows × 5 columns = 10 petri dishes (offsets are along dish index 1→2→…)
 PETRI_TRAY_ROWS = 2
@@ -473,17 +477,7 @@ atexit.register(shutdown_all)
 
 
 def run_workflow():
-
-    x = input ('Enter to start pictures: ')
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(1400)
-    Camera_home()
-    Camera_up(3730)
-
-
-
-    
+        
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
     Camera_home()
@@ -534,6 +528,9 @@ def run_workflow():
             exp_dir = start_multi_petri_imaging(
                 num_petri_dishes=num_petri,
                 output_root=data_root(),
+                tray_cols=PETRI_TRAY_COLS,
+                petri_pre_up_row2=PETRI_DISH_PRE_UP_ROW2,
+                camera_pre_up_row2=CAMERA_DISH_PRE_UP_ROW2,
                 petri_offset_per_dish=PETRI_STEPSIZE * 7,
                 camera_offset_per_dish=CAMERA_STEPSIZE,
                 rows=IMAGING_ROWS,

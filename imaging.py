@@ -384,6 +384,9 @@ def start_multi_petri_imaging(
     experiment_dir=None,
     petri_offset_per_dish=None,
     camera_offset_per_dish=None,
+    tray_cols=5,
+    petri_pre_up_row2=1400,
+    camera_pre_up_row2=3730,
     rows=8,
     cols=8,
     camera_step_per_col=85,
@@ -392,13 +395,18 @@ def start_multi_petri_imaging(
     **capture_kwargs,
 ):
     """
-    Run the same capture grid on 1–10 petri dishes in a tray (2×5 layout).
+    Run the same capture grid on 1–10 petri dishes in a tray (default 2×5).
 
-    Dish 1 uses the current stage/camera position (already pre-positioned in main).
+    Dishes are numbered row-major: 1–5 = first row, 6–10 = second row.
 
-    Each further dish (no homing):
-      - petri_dishes_down(petri_offset_per_dish) — default petri_step_per_row × 7
-      - Camera_down(camera_offset_per_dish) — default one column step
+    Dish 1 uses the stage/camera position caller already set before imaging.
+
+    Dishes 2–5: petri DOWN (offset), camera DOWN (offset)—no homing.
+
+    Dish 6 (first of second row): Camera_home(), petri_dishes_home(), then
+    Camera_up(camera_pre_up_row2), petri_dishes_up(petri_pre_up_row2).
+
+    Dishes 7–10: same incremental moves as 2–5.
 
     One dish  → images in ``data/exp_XX/`` (no subfolder).
     N dishes  → ``data/exp_XX/petri_01/`` … ``petri_NN/``.
@@ -406,10 +414,11 @@ def start_multi_petri_imaging(
     Returns:
         Experiment directory path (parent of all petri subfolders).
     """
-    from camera_module import Camera_down
-    from petri_dishes import petri_dishes_down
+    from camera_module import Camera_home, Camera_up, Camera_down
+    from petri_dishes import petri_dishes_home, petri_dishes_up, petri_dishes_down
 
     num = max(1, min(10, int(num_petri_dishes)))
+    tc = max(1, int(tray_cols))
     row_step = int(petri_step_per_row)
     col_step = int(camera_step_per_col)
     petri_off = int(petri_offset_per_dish if petri_offset_per_dish is not None else row_step * 7)
@@ -421,8 +430,9 @@ def start_multi_petri_imaging(
         exp_dir = _next_exp_dir(output_root)
 
     print(
-        f"[Imaging] Multi-petri run: {num} dish(es), exp={exp_dir}, "
-        f"between dishes: petri DOWN {petri_off}, camera DOWN {cam_off}"
+        f"[Imaging] Multi-petri run: {num} dish(es), {tc} per row, exp={exp_dir}, "
+        f"between dishes in a row: petri DOWN {petri_off}, camera DOWN {cam_off}; "
+        f"row-2 start after homing: petri UP {int(petri_pre_up_row2)}, camera UP {int(camera_pre_up_row2)}"
     )
 
     pattern_kw = {
@@ -437,14 +447,24 @@ def start_multi_petri_imaging(
     for dish in range(1, num + 1):
         print(f"[Imaging] ===== Petri dish {dish} / {num} =====")
         if dish > 1:
-            print(
-                f"[Imaging] Next dish {dish}: petri DOWN {petri_off}, "
-                f"camera DOWN {cam_off}"
-            )
-            if petri_off > 0:
-                petri_dishes_down(petri_off)
-            if cam_off > 0:
-                Camera_down(cam_off)
+            if dish == tc + 1:
+                print(
+                    f"[Imaging] Second row (dish {dish}): homing, then camera UP "
+                    f"{int(camera_pre_up_row2)}, petri UP {int(petri_pre_up_row2)}"
+                )
+                Camera_home()
+                petri_dishes_home()
+                Camera_up(int(camera_pre_up_row2))
+                petri_dishes_up(int(petri_pre_up_row2))
+            else:
+                print(
+                    f"[Imaging] Next dish {dish}: petri DOWN {petri_off}, "
+                    f"camera DOWN {cam_off}"
+                )
+                if petri_off > 0:
+                    petri_dishes_down(petri_off)
+                if cam_off > 0:
+                    Camera_down(cam_off)
             time.sleep(float(settle_seconds))
 
         subdir = petri_dish_subdir(dish) if num > 1 else None
