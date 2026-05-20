@@ -179,13 +179,6 @@ class ProcedureGUI:
         ]:
             self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=3)
 
-        self._mk_btn(
-            left_steps,
-            "Start Incubation + Imaging",
-            None,
-            ACCENT3,
-        ).pack(fill=tk.X, pady=(10, 0))
-
         tk.Button(
             left,
             text="Close",
@@ -233,9 +226,12 @@ class ProcedureGUI:
         right_outer.rowconfigure(1, weight=1)
         right_outer.columnconfigure(0, weight=1)
 
-        tk.Label(right_outer, text="Settings", bg=PANEL, fg=TEXT, font=("Segoe UI", 11, "bold")).grid(
-            row=0, column=0, sticky="w", pady=(0, 4)
-        )
+        self._mk_btn(
+            right_outer,
+            "Start Incubation + Imaging",
+            None,
+            ACCENT3,
+        ).grid(row=0, column=0, sticky="ew", pady=(0, 6))
 
         scroll_host = tk.Frame(right_outer, bg=PANEL)
         scroll_host.grid(row=1, column=0, sticky="nsew")
@@ -263,7 +259,7 @@ class ProcedureGUI:
                 inc, i + 1, self._incub_temps[i], self._incub_times[i], self._incub_enabled[i]
             )
 
-        img = self._section(right, "Imagery Settings")
+        img = self._section(right, "Imagery")
         self._preset_row(
             img,
             "Use rounds:",
