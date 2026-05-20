@@ -101,7 +101,7 @@ PETRI_DISH_PRE_UP = 740
 CAMERA_DISH_PRE_UP = 3730
 
 # Pre-position row 2 (petri 6–10): home both, then these steps (same pattern as row 1 but different petri height)
-PETRI_DISH_PRE_UP_ROW2 = 1500
+PETRI_DISH_PRE_UP_ROW2 = 1460
 CAMERA_DISH_PRE_UP_ROW2 = 3750
 
 # Tray layout: 2 rows × 5 columns = 10 petri dishes (offsets are along dish index 1→2→…)
