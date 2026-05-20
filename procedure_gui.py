@@ -92,7 +92,19 @@ ROUND_BLOCK_RADIUS = 10
 ROUND_ROW_GAP = 5
 ROUND_CONTROLS_SHIFT = 14
 ROUND_ON_INDICATOR = ("Segoe UI", 13)
-ROUND_LABEL_PAD = int(round(22 * ROUND_SCALE))
+ROUND_BADGE_SIZE = int(round(44 * ROUND_SCALE * 1.6))
+ROUND_BADGE_EDGE = 6
+ROUND_BADGE_OUTLINE = 2
+ROUND_RAINBOW = (
+    "#e74c3c",
+    "#e67e22",
+    "#f1c40f",
+    "#2ecc71",
+    "#3498db",
+    "#9b59b6",
+    "#1abc9c",
+)
+ROUND_BLINK_MS = 180
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
 ROUND_TIME_BTN_COLOR = "#d35400"
@@ -138,6 +150,10 @@ class ProcedureGUI:
         ]
         self._round_time_unit_labels = []
         self._round_row_frames = []
+        self._round_badges = []
+        self._study_blinking = False
+        self._badge_blink_phase = 0
+        self._badge_blink_id = None
         self._active_round = 0
 
         self._canvas = None
@@ -529,7 +545,10 @@ class ProcedureGUI:
         hours_var = self._round_time_hours[index]
         time_display = self._round_time_displays[index]
 
-        round_row = tk.Frame(ctrl_box, bg=PANEL)
+        center_wrap = tk.Frame(ctrl_box, bg=PANEL)
+        center_wrap.pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        round_row = tk.Frame(center_wrap, bg=PANEL)
         round_row.pack(anchor="center")
 
         checks_col = tk.Frame(round_row, bg=PANEL)
@@ -596,15 +615,110 @@ class ProcedureGUI:
         self._round_time_btn(
             mrow, "t+", lambda idx=index: self._bump_incub_time(idx, 1)
         ).pack(side=tk.LEFT, padx=(gap, 0))
-        tk.Label(
-            round_row,
-            text=f"R{index + 1}",
-            bg=PANEL,
-            fg=TEXT,
-            font=ROUND_VALUE_FONT,
-        ).pack(side=tk.LEFT, padx=(ROUND_LABEL_PAD, 0), anchor="center")
+        self._round_badges.append(self._create_round_badge(ctrl_box, index))
         self._sync_round_time_display(index)
         _redraw_round_shell(PANEL)
+
+    def _round_row_bg(self, round_index):
+        """Background for round index 1..NUM_STUDY_ROUNDS."""
+        if round_index == self._active_round and self._busy:
+            return ROUND_ACTIVE
+        if self._round_enabled[round_index - 1].get():
+            return ROUND_ENABLED
+        return PANEL
+
+    @staticmethod
+    def _badge_label_color(fill):
+        fill = fill.lstrip("#")
+        if len(fill) != 6:
+            return TEXT
+        r, g, b = (int(fill[i : i + 2], 16) for i in (0, 2, 4))
+        return "#0d1520" if (0.299 * r + 0.587 * g + 0.114 * b) > 140 else TEXT
+
+    def _create_round_badge(self, parent, index):
+        size = ROUND_BADGE_SIZE
+        pad = 2
+        canvas = tk.Canvas(
+            parent,
+            width=size,
+            height=size,
+            bg=PANEL,
+            highlightthickness=0,
+            bd=0,
+        )
+        canvas.pack(side=tk.RIGHT, padx=(0, ROUND_BADGE_EDGE), anchor="center")
+        r = size // 2
+        oval_id = canvas.create_oval(
+            pad,
+            pad,
+            size - pad,
+            size - pad,
+            fill=CARD,
+            outline=TEXT,
+            width=ROUND_BADGE_OUTLINE,
+        )
+        text_id = canvas.create_text(
+            r,
+            r,
+            text=f"R{index + 1}",
+            fill=TEXT,
+            font=ROUND_VALUE_FONT,
+        )
+        badge = {
+            "canvas": canvas,
+            "oval": oval_id,
+            "text": text_id,
+            "index": index,
+        }
+        self._update_round_badge_idle(badge)
+        return badge
+
+    def _update_round_badge_idle(self, badge):
+        if self._study_blinking:
+            return
+        idx = badge["index"]
+        row_bg = self._round_row_bg(idx + 1)
+        fill = ROUND_ACTIVE if idx + 1 == self._active_round and self._busy else CARD
+        if self._round_enabled[idx].get() and fill == CARD:
+            fill = ROUND_ENABLED
+        outline = ROUND_ACTIVE if idx + 1 == self._active_round and self._busy else TEXT
+        canvas = badge["canvas"]
+        canvas.configure(bg=row_bg)
+        canvas.itemconfig(badge["oval"], fill=fill, outline=outline)
+        canvas.itemconfig(badge["text"], fill=self._badge_label_color(fill))
+
+    def _start_round_badge_blink(self):
+        if self._study_blinking:
+            return
+        self._study_blinking = True
+        self._badge_blink_phase = 0
+        self._tick_round_badge_blink()
+
+    def _stop_round_badge_blink(self):
+        self._study_blinking = False
+        if self._badge_blink_id is not None:
+            try:
+                self.root.after_cancel(self._badge_blink_id)
+            except tk.TclError:
+                pass
+            self._badge_blink_id = None
+        for badge in self._round_badges:
+            self._update_round_badge_idle(badge)
+
+    def _tick_round_badge_blink(self):
+        if not self._study_blinking:
+            return
+        phase = self._badge_blink_phase
+        for badge in self._round_badges:
+            idx = badge["index"]
+            row_bg = self._round_row_bg(idx + 1)
+            color = ROUND_RAINBOW[(phase + idx) % len(ROUND_RAINBOW)]
+            canvas = badge["canvas"]
+            canvas.configure(bg=row_bg)
+            canvas.itemconfig(badge["oval"], fill=color, outline=color)
+            canvas.itemconfig(badge["text"], fill=self._badge_label_color(color))
+        self._badge_blink_phase = (phase + 1) % len(ROUND_RAINBOW)
+        self._badge_blink_id = self.root.after(ROUND_BLINK_MS, self._tick_round_badge_blink)
 
     def _set_frame_bg(self, widget, bg):
         try:
@@ -629,6 +743,9 @@ class ProcedureGUI:
             self._set_frame_bg(inner, bg)
             shell._round_canvas.configure(bg=PANEL)
             shell._round_redraw(bg)
+        if not self._study_blinking:
+            for badge in self._round_badges:
+                self._update_round_badge_idle(badge)
 
     def _highlight_round(self, round_index):
         self._active_round = round_index
@@ -799,9 +916,16 @@ class ProcedureGUI:
 
     def _set_busy(self, busy, status):
         self._busy = busy
-        self._run_on_ui(
-            lambda s=status: (self._status_display.set(s), self._refresh_round_highlight())
-        )
+
+        def _apply(s=status):
+            self._status_display.set(s)
+            if busy and s == STUDY_BTN_TITLE:
+                self._start_round_badge_blink()
+            elif not busy:
+                self._stop_round_badge_blink()
+            self._refresh_round_highlight()
+
+        self._run_on_ui(_apply)
 
     def _format_remaining(self, remaining_s):
         mins, secs = divmod(int(max(0, remaining_s)), 60)
