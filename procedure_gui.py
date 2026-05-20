@@ -66,13 +66,15 @@ PRESET_FONT = ("Segoe UI", 8)
 SMALL_FONT = ("Segoe UI", 8)
 VALUE_FONT = ("Segoe UI", 10, "bold")
 BTN_RADIUS = 8
-LEFT_BTN_HEIGHT = int(round(40 * 1.3))  # left step buttons only
+LEFT_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))  # left step buttons (height ×1.3 twice)
 LEFT_BTN_WIDTH_SCALE = 1.4
 LEFT_PANEL_MIN_WIDTH = int(round(180 * LEFT_BTN_WIDTH_SCALE))
 MAIN_BTN_HEIGHT = 40
 SMALL_BTN_HEIGHT = 26
 PETRI_STEPPER_BTN_HEIGHT = 38
+PETRI_STEPPER_BTN_WIDTH = int(round(44 * 1.5))
 PETRI_STEPPER_BTN_FONT = ("Segoe UI", 12, "bold")
+PETRI_LABEL_FONT = ("Segoe UI", 10, "bold")
 LEFT_BTN_GAP = 4
 
 
@@ -523,8 +525,8 @@ class ProcedureGUI:
             parent,
             text="Petri dishes",
             bg=PANEL,
-            fg=MUTED,
-            font=("Segoe UI", 9),
+            fg=TEXT,
+            font=PETRI_LABEL_FONT,
         ).pack(anchor="w", pady=(6, 2))
         row = tk.Frame(parent, bg=PANEL)
         row.pack(fill=tk.X, pady=(0, 4))
@@ -534,7 +536,7 @@ class ProcedureGUI:
             lambda: self._petri_count.set(max(1, int(self._petri_count.get()) - 1)),
             height=PETRI_STEPPER_BTN_HEIGHT,
             font=PETRI_STEPPER_BTN_FONT,
-            min_width=44,
+            min_width=PETRI_STEPPER_BTN_WIDTH,
         ).pack(side=tk.LEFT, padx=(0, 4))
         tk.Label(
             row,
@@ -555,7 +557,7 @@ class ProcedureGUI:
             ),
             height=PETRI_STEPPER_BTN_HEIGHT,
             font=PETRI_STEPPER_BTN_FONT,
-            min_width=44,
+            min_width=PETRI_STEPPER_BTN_WIDTH,
         ).pack(side=tk.LEFT, padx=(4, 0))
 
     def _bump_temp(self, var, direction):
