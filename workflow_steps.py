@@ -9,12 +9,13 @@ from device_config import (
     CAMERA_DISH_PRE_UP,
     CAMERA_DISH_PRE_UP_ROW2,
     CAMERA_STEPSIZE,
-    DEFAULT_INCUBATION_COUNT,
-    DEFAULT_INCUBATION_MINUTES,
-    DEFAULT_INCUBATION_TEMP_C,
+    DEFAULT_INCUBATION_SLOT_TEMPS,
+    DEFAULT_INCUBATION_SLOT_TIMES,
     IMAGING_COLS,
     IMAGING_ROWS,
     MAX_PETRI_DISHES,
+    MIN_ROUND3_ABOVE_ROUND1_MIN,
+    NUM_INCUBATION_SLOTS,
     PETRI_DISH_PRE_UP,
     PETRI_DISH_PRE_UP_ROW2,
     PETRI_STEPSIZE,
@@ -51,16 +52,20 @@ def step_03_shift_for_incubation():
 
 
 def step_04_incubation(
-    target_c=DEFAULT_INCUBATION_TEMP_C,
-    minutes=DEFAULT_INCUBATION_MINUTES,
-    count=DEFAULT_INCUBATION_COUNT,
+    incubation_temps=None,
+    incubation_times=None,
     on_tick=None,
 ):
-    """Step 4: Run incubation cycle(s) at target temperature."""
-    n = max(1, int(count))
-    for i in range(1, n + 1):
-        print(f"[Step 4] Incubation {i}/{n}: {target_c}°C for {minutes} min")
-        Start_incubation(float(target_c), float(minutes), on_tick=on_tick)
+    """Step 4: Run three incubation slots (temp + duration each)."""
+    temps = list(incubation_temps or DEFAULT_INCUBATION_SLOT_TEMPS)
+    times = list(incubation_times or DEFAULT_INCUBATION_SLOT_TIMES)
+    while len(temps) < NUM_INCUBATION_SLOTS:
+        temps.append(temps[-1] if temps else 37.0)
+    while len(times) < NUM_INCUBATION_SLOTS:
+        times.append(times[-1] if times else 1.0)
+    for i in range(NUM_INCUBATION_SLOTS):
+        print(f"[Step 4] Slot {i + 1}/{NUM_INCUBATION_SLOTS}: {temps[i]:g}°C for {times[i]:g} min")
+        Start_incubation(float(temps[i]), float(times[i]), on_tick=on_tick)
 
 
 def step_05_prepare_imaging():
@@ -134,7 +139,7 @@ def run_timed_picture_study(
     num_petri_dishes,
     num_rounds,
     interval_minutes,
-    target_c=DEFAULT_INCUBATION_TEMP_C,
+    target_c=None,
     on_tick=None,
     on_log=None,
 ):
@@ -147,6 +152,9 @@ def run_timed_picture_study(
 
     Returns parent experiment directory.
     """
+    if target_c is None:
+        target_c = DEFAULT_INCUBATION_SLOT_TEMPS[0]
+
     num_rounds = max(1, min(6, int(num_rounds)))
     intervals = list(interval_minutes)[:6]
     while len(intervals) < 6:
@@ -208,10 +216,11 @@ def run_incubation_imaging_study(
     while len(pic_times) < 5:
         pic_times.append(pic_times[-1] if pic_times else 3.0)
 
-    if pic_times[2] < pic_times[0] + 5:
+    min_r3 = pic_times[0] + MIN_ROUND3_ABOVE_ROUND1_MIN
+    if pic_times[2] < min_r3:
         raise ValueError(
             f"Round 3 time ({pic_times[2]:g} min) must be at least "
-            f"{pic_times[0] + 5:g} min (Round 1 + 5 min)"
+            f"{min_r3:g} min (Round 1 + {MIN_ROUND3_ABOVE_ROUND1_MIN:g} min)"
         )
 
     exp_dir = _next_exp_dir(data_root())

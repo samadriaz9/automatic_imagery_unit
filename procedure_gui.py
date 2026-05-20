@@ -31,7 +31,6 @@ from workflow_steps import (
     step_01_all_home,
     step_02_insert_petri_dishes,
     step_03_shift_for_incubation,
-    step_04_incubation,
     step_05_post_imaging_cleanup,
     step_05_prepare_imaging,
     step_06_sterilize,
