@@ -87,27 +87,18 @@ try:
 except ModuleNotFoundError:
     consumable_cleanup = _missing_cleanup
 
-from incubation_module import keep_temperature_pid
-from imaging import data_root, start_multi_petri_imaging
-
-# --- Imaging grid (edit here for trial-and-error) ---
-IMAGING_ROWS = 8
-IMAGING_COLS = 8
-CAMERA_STEPSIZE = 95   # steps between each photo column (camera rail)
-PETRI_STEPSIZE = 76    # steps between each photo row (petri dish stage)
-
-# Pre-position row 1 before dish 1 scan (after petri_dishes_home / Camera_home)
-PETRI_DISH_PRE_UP = 740
-CAMERA_DISH_PRE_UP = 3730
-
-# Pre-position row 2 (petri 6–10): home both, then these steps (same pattern as row 1 but different petri height)
-PETRI_DISH_PRE_UP_ROW2 = 1460
-CAMERA_DISH_PRE_UP_ROW2 = 3750
-
-# Tray layout: 2 rows × 5 columns = 10 petri dishes (offsets are along dish index 1→2→…)
-PETRI_TRAY_ROWS = 2
-PETRI_TRAY_COLS = 5
-MAX_PETRI_DISHES = PETRI_TRAY_ROWS * PETRI_TRAY_COLS
+from device_config import MAX_PETRI_DISHES
+from workflow_steps import (
+    capture_petri_dishes,
+    run_timed_picture_study,
+    step_01_all_home,
+    step_02_insert_petri_dishes,
+    step_03_shift_for_incubation,
+    step_04_incubation,
+    step_05_post_imaging_cleanup,
+    step_05_prepare_imaging,
+    step_06_sterilize,
+)
 
 
 def _ask_num_petri_dishes():
@@ -477,81 +468,30 @@ atexit.register(shutdown_all)
 
 
 def run_workflow():
-        
-    x = input ('Enter to start all modules home: ')
-    print("Step 01: All modules home")
-    Camera_home()
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(300)
+    input("Step 01: All Home — press Enter")
+    step_01_all_home()
 
-    x = input ('Enter to keep petri dishes home: ')
-    print("Step 02: ")
-    incubator_lid_home()
-    petri_dishes_home()
+    input("Step 02: Insert petri dishes — press Enter")
+    step_02_insert_petri_dishes()
 
-    x = input ('Enter to shift for incubation: ')
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(400)
+    input("Step 03: Shift for incubation — press Enter")
+    step_03_shift_for_incubation()
 
-    x = input ('Enter to start incubation: ')
-    keep_temperature_pid(37, 1)
+    input("Step 04: Start incubation — press Enter")
+    step_04_incubation()
 
-    x = input ('Enter to start pictures: ')
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(PETRI_DISH_PRE_UP)
-    Camera_home()
-    Camera_up(CAMERA_DISH_PRE_UP)
-
-    x = input("Step 13: Enter to start pictures")
+    input("Step 05: Take pictures — press Enter")
     num_petri = _ask_num_petri_dishes()
-    camera_session_started = False
+    step_05_prepare_imaging()
     try:
-        camera_ready, _camera_relay_was_used = ensure_usb_camera_ready(device_index=0)
-        if not camera_ready:
-            print(
-                f"[Camera] Failed after {CAMERA_POWER_ON_ATTEMPTS} power-on attempts "
-                "— skipping imaging"
-            )
-            return_all_home_positions(pulse_camera_off=True)
-        else:
-            camera_session_started = True
-            print(
-                f"Starting imaging: {num_petri} petri dish(es), "
-                f"grid {IMAGING_ROWS}x{IMAGING_COLS}, "
-                f"camera step={CAMERA_STEPSIZE}, petri step={PETRI_STEPSIZE}"
-            )
-            exp_dir = start_multi_petri_imaging(
-                num_petri_dishes=num_petri,
-                output_root=data_root(),
-                tray_cols=PETRI_TRAY_COLS,
-                petri_pre_up_row2=PETRI_DISH_PRE_UP_ROW2,
-                camera_pre_up_row2=CAMERA_DISH_PRE_UP_ROW2,
-                petri_offset_per_dish=PETRI_STEPSIZE * 7,
-                camera_offset_per_dish=CAMERA_STEPSIZE,
-                rows=IMAGING_ROWS,
-                cols=IMAGING_COLS,
-                camera_step_per_col=CAMERA_STEPSIZE,
-                petri_step_per_row=PETRI_STEPSIZE,
-            )
-            time.sleep(0.5)
-            print(f"Imaging completed — experiment folder: {exp_dir}")
+        exp_dir = capture_petri_dishes(num_petri)
+        print(f"Imaging completed — saved under: {exp_dir}")
     except Exception as e:
         print(f"Imaging failed: {e}")
-    finally:
-        if camera_session_started:
-            print("[Camera] Switching camera off after imaging")
-            power_off_usb_camera()
-    incubator_lid_home()
-    petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(300)
+    step_05_post_imaging_cleanup()
 
-    x = input ('Step 15: Enter to Steriliz: ')
+    input("Step 06: Sterilize — press Enter")
+    step_06_sterilize()
 
 
 if __name__ == "__main__":

@@ -58,6 +58,7 @@ def Start_incubation(
     target_temp_c,
     duration_minutes,
     poll_seconds=2.0,
+    on_tick=None,
     pwm_pin=RPWM_PIN,
     pwm_freq=100,
     kp=10.0,
@@ -80,6 +81,7 @@ def Start_incubation(
         max_duty: safety cap for heater duty cycle (%).
         ramp_step/ramp_delay: soft-ramp behavior to reduce thermal overshoot.
         poll_seconds: sensor polling interval.
+        on_tick: optional callback(elapsed_s, remaining_s, temp_c, target_temp_c).
     """
     target_temp_c = float(target_temp_c)
     duration_s = max(0.0, float(duration_minutes) * 60.0)
@@ -137,6 +139,12 @@ def Start_incubation(
                 ramp_delay=ramp_delay,
             )
             print(f"[Incubation] {temp_c:.2f}C -> heater {current_duty:.1f}%")
+            if on_tick is not None:
+                elapsed = time.time() - start
+                try:
+                    on_tick(elapsed, max(0.0, duration_s - elapsed), temp_c, target_temp_c)
+                except Exception:
+                    pass
 
             time.sleep(poll_seconds)
     finally:
