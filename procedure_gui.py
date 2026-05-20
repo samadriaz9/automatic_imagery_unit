@@ -77,12 +77,14 @@ STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))
 STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
 STUDY_BTN_FONT = ("Segoe UI", 14, "bold")
 STUDY_BTN_RADIUS = 12
-ROUND_ADJ_BTN_HEIGHT = 80
-ROUND_ADJ_BTN_WIDTH = 104
-ROUND_ADJ_BTN_FONT = ("Segoe UI", 22, "bold")
-ROUND_ADJ_BTN_RADIUS = 16
-ROUND_VALUE_FONT = ("Segoe UI", 20, "bold")
-ROUND_UNIT_FONT = ("Segoe UI", 16)
+ROUND_SCALE = 0.8
+ROUND_ADJ_BTN_HEIGHT = int(round(80 * ROUND_SCALE))
+ROUND_ADJ_BTN_WIDTH = int(round(104 * ROUND_SCALE))
+ROUND_ADJ_BTN_FONT = ("Segoe UI", int(round(22 * ROUND_SCALE)), "bold")
+ROUND_ADJ_BTN_RADIUS = int(round(16 * ROUND_SCALE))
+ROUND_VALUE_FONT = ("Segoe UI", int(round(20 * ROUND_SCALE)), "bold")
+ROUND_UNIT_FONT = ("Segoe UI", int(round(16 * ROUND_SCALE)))
+ROUND_ON_FONT = ("Segoe UI", 14, "bold")
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
 ROUND_TIME_BTN_COLOR = "#d35400"
@@ -458,11 +460,13 @@ class ProcedureGUI:
             text="On",
             variable=enabled_var,
             bg=PANEL,
-            fg=MUTED,
-            selectcolor=CARD,
+            fg=TEXT,
+            selectcolor=ROUND_ACTIVE,
             activebackground=PANEL,
             activeforeground=TEXT,
-            font=SMALL_FONT,
+            font=ROUND_ON_FONT,
+            padx=6,
+            pady=4,
             command=self._refresh_round_highlight,
         ).pack(side=tk.RIGHT)
 
@@ -471,28 +475,29 @@ class ProcedureGUI:
 
         trow = tk.Frame(ctrl_box, bg=PANEL)
         trow.pack(anchor="center", pady=(0, 8))
+        gap = int(round(8 * ROUND_SCALE))
         self._round_temp_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(
-            side=tk.LEFT, padx=(0, 8)
+            side=tk.LEFT, padx=(0, gap)
         )
         tk.Label(
             trow, textvariable=temp_var, bg=PANEL, fg=ACCENT, font=ROUND_VALUE_FONT, width=4
-        ).pack(side=tk.LEFT, padx=8)
+        ).pack(side=tk.LEFT, padx=gap)
         tk.Label(trow, text="°C", bg=PANEL, fg=MUTED, font=ROUND_UNIT_FONT).pack(side=tk.LEFT)
         self._round_temp_btn(trow, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(
-            side=tk.LEFT, padx=(8, 0)
+            side=tk.LEFT, padx=(gap, 0)
         )
 
         mrow = tk.Frame(ctrl_box, bg=PANEL)
         mrow.pack(anchor="center")
         self._round_time_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(
-            side=tk.LEFT, padx=(0, 8)
+            side=tk.LEFT, padx=(0, gap)
         )
         tk.Label(
             mrow, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=ROUND_VALUE_FONT, width=4
-        ).pack(side=tk.LEFT, padx=8)
+        ).pack(side=tk.LEFT, padx=gap)
         tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=ROUND_UNIT_FONT).pack(side=tk.LEFT)
         self._round_time_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(
-            side=tk.LEFT, padx=(8, 0)
+            side=tk.LEFT, padx=(gap, 0)
         )
 
     def _set_frame_bg(self, widget, bg):
