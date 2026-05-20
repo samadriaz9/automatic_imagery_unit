@@ -477,7 +477,7 @@ def run_workflow():
     x = input ('Enter to start pictures: ')
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(1000)
+    petri_dishes_up(1400)
     Camera_home()
     Camera_up(3730)
 
