@@ -82,8 +82,11 @@ ROUND_ADJ_BTN_HEIGHT = int(round(80 * ROUND_SCALE))
 ROUND_ADJ_BTN_WIDTH = int(round(104 * ROUND_SCALE))
 ROUND_ADJ_BTN_FONT = ("Segoe UI", int(round(22 * ROUND_SCALE)), "bold")
 ROUND_ADJ_BTN_RADIUS = int(round(16 * ROUND_SCALE))
-ROUND_VALUE_FONT = ("Segoe UI", int(round(20 * ROUND_SCALE)), "bold")
+ROUND_VALUE_FONT = ("Segoe UI", int(round(20 * ROUND_SCALE * 1.5)), "bold")
 ROUND_UNIT_FONT = ("Segoe UI", int(round(16 * ROUND_SCALE)))
+ROUND_BLOCK_PAD = 6
+ROUND_BLOCK_RADIUS = 10
+ROUND_ROW_GAP = 5
 ROUND_ON_INDICATOR = ("Segoe UI", 13)
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
@@ -449,9 +452,36 @@ class ProcedureGUI:
         )
 
     def _study_round_row(self, parent, _index, temp_var, time_var, enabled_var):
-        block = tk.Frame(parent, bg=PANEL, padx=2, pady=1)
-        block.pack(fill=tk.X, pady=1)
-        self._round_row_frames.append(block)
+        block_shell = tk.Frame(parent, bg=PANEL)
+        block_shell.pack(fill=tk.X, pady=ROUND_ROW_GAP)
+        self._round_row_frames.append(block_shell)
+
+        canvas = tk.Canvas(block_shell, bg=PANEL, highlightthickness=0, bd=0)
+        canvas.pack(fill=tk.X)
+
+        block = tk.Frame(canvas, bg=PANEL, padx=ROUND_BLOCK_PAD, pady=4)
+        block_shell._round_canvas = canvas
+        block_shell._round_inner = block
+        block_shell._round_bg = PANEL
+
+        def _redraw_round_shell(bg=None):
+            if bg is not None:
+                block_shell._round_bg = bg
+            bg = block_shell._round_bg
+            block.update_idletasks()
+            ih = block.winfo_reqheight()
+            shell_w = max(block_shell.winfo_width(), block.winfo_reqwidth() + 2 * ROUND_BLOCK_PAD, 1)
+            ch = ih + 2 * ROUND_BLOCK_PAD
+            canvas.config(height=ch)
+            canvas.delete("all")
+            self._paint_round_rect(
+                canvas, 2, 2, shell_w - 2, ch - 2, ROUND_BLOCK_RADIUS, bg
+            )
+            canvas.create_window(ROUND_BLOCK_PAD, ROUND_BLOCK_PAD, window=block, anchor="nw")
+
+        block_shell._round_redraw = _redraw_round_shell
+        block.bind("<Configure>", lambda _e: _redraw_round_shell())
+        block_shell.bind("<Configure>", lambda _e: _redraw_round_shell())
 
         ctrl_box = tk.Frame(block, bg=PANEL)
         ctrl_box.pack(fill=tk.X, pady=(2, 0))
@@ -494,6 +524,7 @@ class ProcedureGUI:
         self._round_time_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(
             side=tk.LEFT, padx=(gap, 0)
         )
+        _redraw_round_shell(PANEL)
 
     def _set_frame_bg(self, widget, bg):
         try:
@@ -505,15 +536,19 @@ class ProcedureGUI:
 
     def _refresh_round_highlight(self):
         active = self._active_round
-        for i, frame in enumerate(self._round_row_frames, start=1):
+        for i, shell in enumerate(self._round_row_frames, start=1):
             if i == active and self._busy:
                 bg = ROUND_ACTIVE
             elif self._round_enabled[i - 1].get():
                 bg = ROUND_ENABLED
             else:
                 bg = PANEL
-            frame.configure(bg=bg)
-            self._set_frame_bg(frame, bg)
+            shell.configure(bg=PANEL)
+            inner = shell._round_inner
+            inner.configure(bg=bg)
+            self._set_frame_bg(inner, bg)
+            shell._round_canvas.configure(bg=PANEL)
+            shell._round_redraw(bg)
 
     def _highlight_round(self, round_index):
         self._active_round = round_index
