@@ -51,8 +51,12 @@ ACCENT = "#5b9bd5"
 ACCENT2 = "#7ec8a4"
 ACCENT3 = "#c9a55c"
 SELECTED = "#3d6ea8"
-ROUND_ACTIVE = "#4a6fa8"
+ROUND_ACTIVE = "#2ecc71"
+ROUND_ENABLED = "#1a5c3a"
+STUDY_BTN_COLOR = "#8e44ad"
+STUDY_BTN_HOVER = "#a569bd"
 TEXT = "#eef2f8"
+TEXT_ON_COLOR = "#ffffff"
 STUDY_BTN_TITLE = "Incubation and Imaging"
 MUTED = "#9aa5b8"
 WARN = "#e8a87c"
@@ -69,8 +73,10 @@ LEFT_BTN_WIDTH_SCALE = 1.4
 LEFT_PANEL_MIN_WIDTH = int(round(180 * LEFT_BTN_WIDTH_SCALE))
 CENTER_PANEL_WIDTH = 400
 RIGHT_PANEL_MIN_WIDTH = 340
-STUDY_BTN_HEIGHT = int(round(40 * 1.3))
+STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))
 STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
+STUDY_BTN_FONT = ("Segoe UI", 14, "bold")
+STUDY_BTN_RADIUS = 12
 MAIN_BTN_HEIGHT = 40
 SMALL_BTN_HEIGHT = 26
 PETRI_STEPPER_BTN_HEIGHT = 38
@@ -231,15 +237,19 @@ class ProcedureGUI:
         right_outer.grid_propagate(False)
         right_outer.columnconfigure(0, weight=1)
 
-        self._mk_btn(
+        self._mk_round_btn(
             right_outer,
             STUDY_BTN_TITLE,
-            None,
-            ACCENT3,
+            lambda: self._run_action(STUDY_BTN_TITLE, None),
+            color=STUDY_BTN_COLOR,
+            hover=STUDY_BTN_HOVER,
+            fg=TEXT_ON_COLOR,
             height=STUDY_BTN_HEIGHT,
+            font=STUDY_BTN_FONT,
+            radius=STUDY_BTN_RADIUS,
             stretch=True,
             min_width=STUDY_BTN_MIN_WIDTH,
-        ).pack(fill=tk.X, pady=(0, 10))
+        ).pack(fill=tk.X, pady=(0, 12))
 
         rounds_box = tk.Frame(right_outer, bg=PANEL)
         rounds_box.pack(fill=tk.BOTH, expand=True)
@@ -445,7 +455,7 @@ class ProcedureGUI:
             if i == active and self._busy:
                 bg = ROUND_ACTIVE
             elif self._round_enabled[i - 1].get():
-                bg = CARD
+                bg = ROUND_ENABLED
             else:
                 bg = PANEL
             frame.configure(bg=bg)
@@ -689,7 +699,7 @@ class ProcedureGUI:
             round_hint = f"Round {self._active_round}"
         y0 = cy - 52 if round_hint else cy - 42
         if round_hint:
-            c.create_text(cx, cy - 58, text=round_hint, fill=ACCENT3, font=("Segoe UI", 13, "bold"))
+            c.create_text(cx, cy - 58, text=round_hint, fill=ROUND_ACTIVE, font=("Segoe UI", 13, "bold"))
         c.create_text(cx, y0 + 10, text=temp, fill=TEXT, font=("Segoe UI", 34, "bold"))
         c.create_text(cx, cy + 4, text=target, fill=MUTED, font=("Segoe UI", 12))
         c.create_text(cx, cy + 40, text=remaining, fill=ACCENT2, font=("Segoe UI", 22, "bold"))
