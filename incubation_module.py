@@ -116,7 +116,23 @@ def Start_incubation(
 
     start = time.time()
 
+    def _notify_tick(temp_c):
+        if on_tick is None:
+            return
+        elapsed = time.time() - start
+        remaining = max(0.0, duration_s - elapsed)
+        try:
+            on_tick(elapsed, remaining, temp_c, target_temp_c)
+        except Exception:
+            pass
+
     try:
+        try:
+            _notify_tick(_read_ds18b20_c())
+        except RuntimeError as exc:
+            print(f"[Incubation] Initial sensor read failed: {exc}")
+            _notify_tick(float("nan"))
+
         while (time.time() - start) < duration_s:
             temp_c = _read_ds18b20_c()
             if pid is not None:
@@ -139,13 +155,7 @@ def Start_incubation(
                 ramp_delay=ramp_delay,
             )
             print(f"[Incubation] {temp_c:.2f}C -> heater {current_duty:.1f}%")
-            if on_tick is not None:
-                elapsed = time.time() - start
-                try:
-                    on_tick(elapsed, max(0.0, duration_s - elapsed), temp_c, target_temp_c)
-                except Exception:
-                    pass
-
+            _notify_tick(temp_c)
             time.sleep(poll_seconds)
     finally:
         # Safety: always leave heater OFF on function exit/error.

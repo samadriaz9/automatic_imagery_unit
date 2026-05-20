@@ -6,6 +6,8 @@ Run: python procedure_gui.py
 Escape toggles fullscreen.
 """
 
+import math
+import queue
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
@@ -58,8 +60,8 @@ TEXT = "#eef2f8"
 MUTED = "#9aa5b8"
 WARN = "#e8a87c"
 CLOSE_BTN = "#b85450"
-BTN_FONT = ("Segoe UI", 10, "bold")
-ADJ_FONT = ("Segoe UI", 9, "bold")
+BTN_FONT = ("Segoe UI", 11, "bold")
+ADJ_FONT = ("Segoe UI", 10, "bold")
 PRESET_FONT = ("Segoe UI", 8)
 SMALL_FONT = ("Segoe UI", 8)
 VALUE_FONT = ("Segoe UI", 10, "bold")
@@ -102,10 +104,12 @@ class ProcedureGUI:
         self._gauge_cy = 120
         self._gauge_r = 90
 
+        self._ui_queue = queue.Queue()
         self._build_ui()
         self._go_fullscreen()
         self.root.bind("<Escape>", self._on_escape)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.after(50, self._drain_ui_queue)
 
     def _go_fullscreen(self):
         self._fullscreen = True
@@ -163,8 +167,8 @@ class ProcedureGUI:
             ("All Home", step_01_all_home),
             ("Insert Petri Dishes", step_02_insert_petri_dishes),
             ("Shift for Incubation", step_03_shift_for_incubation),
-            ("Start Incubation", self._run_incubation_only),
-            ("Take Pictures", self._run_pictures_only),
+            ("Start Incubation", None),
+            ("Take Pictures", None),
             ("Sterilize", step_06_sterilize),
         ]:
             self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=3)
@@ -172,7 +176,7 @@ class ProcedureGUI:
         self._mk_btn(
             left_steps,
             "Start Incubation + Imaging",
-            self._run_incubation_imaging,
+            None,
             ACCENT3,
         ).pack(fill=tk.X, pady=(10, 0))
 
@@ -185,11 +189,11 @@ class ProcedureGUI:
             activebackground="#d46a66",
             activeforeground=TEXT,
             relief=tk.FLAT,
-            padx=4,
-            pady=8,
+            padx=5,
+            pady=10,
             font=BTN_FONT,
             cursor="hand2",
-            width=18,
+            width=20,
         ).pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
         # --- Center ---
@@ -343,8 +347,8 @@ class ProcedureGUI:
             activebackground=SELECTED,
             relief=tk.FLAT,
             font=ADJ_FONT,
-            padx=2,
-            pady=1,
+            padx=3,
+            pady=3,
             cursor="hand2",
         )
 
@@ -450,25 +454,44 @@ class ProcedureGUI:
         if not self._busy:
             self._draw_idle_gauge()
 
-    def _mk_btn(self, parent, text, command, color=ACCENT, width=18):
+    def _mk_btn(self, parent, text, command, color=ACCENT, width=20):
         return tk.Button(
             parent,
             text=text,
             width=width,
-            command=lambda: self._run_action(text, command),
+            command=lambda t=text, f=command: self._run_action(t, f),
             bg=color,
             fg="#0d1520",
             activebackground="#8ab4e8",
             relief=tk.FLAT,
-            padx=4,
-            pady=8,
+            padx=5,
+            pady=10,
             font=BTN_FONT,
             cursor="hand2",
         )
 
-    def _log_msg(self, msg):
+    def _run_on_ui(self, fn):
+        """Schedule GUI work on the Tk main thread (safe from worker threads)."""
+        self._ui_queue.put(fn)
+
+    def _drain_ui_queue(self):
+        while True:
+            try:
+                fn = self._ui_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                fn()
+            except Exception as exc:
+                self._log_msg_unsafe(f"UI error: {exc}")
+        self.root.after(50, self._drain_ui_queue)
+
+    def _log_msg_unsafe(self, msg):
         self._log.insert(tk.END, msg + "\n")
         self._log.see(tk.END)
+
+    def _log_msg(self, msg):
+        self._run_on_ui(lambda m=msg: self._log_msg_unsafe(m))
 
     def _enabled_flags(self, vars_list):
         return [bool(v.get()) for v in vars_list]
@@ -490,40 +513,51 @@ class ProcedureGUI:
     def _run_action(self, title, fn):
         if self._busy:
             return
-        if fn is self._run_incubation_imaging:
+        if title == "Start Incubation + Imaging":
             try:
                 self._validate_study_settings()
             except ValueError as exc:
                 messagebox.showerror("Invalid settings", str(exc))
                 return
+
         def worker():
             self._set_busy(True, title)
             try:
-                if fn is self._run_incubation_only:
+                if title == "Start Incubation":
                     self._do_incubation()
-                elif fn is self._run_pictures_only:
+                    self._log_msg(f"Done: {title}")
+                elif title == "Take Pictures":
                     self._do_pictures()
-                elif fn is self._run_incubation_imaging:
+                    self._log_msg(f"Done: {title}")
+                elif title == "Start Incubation + Imaging":
                     self._do_incubation_imaging()
-                else:
+                    self._log_msg(f"Done: {title}")
+                elif fn is not None:
                     fn()
                     self._log_msg(f"Done: {title}")
+                else:
+                    raise RuntimeError(f"No handler for step: {title}")
             except Exception as exc:
                 self._log_msg(f"ERROR: {exc}")
-                self.root.after(0, lambda: messagebox.showerror("Error", str(exc)))
+                self._run_on_ui(lambda e=str(exc): messagebox.showerror("Error", e))
             finally:
                 self._set_busy(False, "Idle")
-                self.root.after(0, lambda: self._set_center_readout(idle=True))
+                self._run_on_ui(lambda: self._set_center_readout(idle=True))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _set_busy(self, busy, status):
         self._busy = busy
-        self.root.after(0, lambda: self._status_display.set(status))
+        self._run_on_ui(lambda s=status: self._status_display.set(s))
 
     def _format_remaining(self, remaining_s):
         mins, secs = divmod(int(max(0, remaining_s)), 60)
         return f"{mins:02d}:{secs:02d}"
+
+    def _temp_text(self, temp_c):
+        if temp_c is None or (isinstance(temp_c, float) and math.isnan(temp_c)):
+            return "--.- °C"
+        return f"{temp_c:.1f} °C"
 
     def _set_center_readout(self, temp_c=None, target_c=None, remaining_s=None, idle=False):
         if idle:
@@ -532,16 +566,20 @@ class ProcedureGUI:
             self._time_display.set("Ready")
             self._draw_idle_gauge()
             return
-        self._temp_display.set(f"{temp_c:.1f} °C")
+        self._temp_display.set(self._temp_text(temp_c))
         self._target_display.set(f"Target {target_c:.0f} °C")
         self._time_display.set(self._format_remaining(remaining_s))
 
     def _incubation_tick(self, elapsed, remaining, temp_c, target_c):
-        def ui():
-            self._set_center_readout(temp_c, target_c, remaining)
-            self._draw_gauge(temp_c, target_c, remaining, elapsed)
+        bar_temp = 0.0 if (
+            temp_c is None or (isinstance(temp_c, float) and math.isnan(temp_c))
+        ) else float(temp_c)
 
-        self.root.after(0, ui)
+        def _ui(e=elapsed, r=remaining, t=temp_c, g=target_c, b=bar_temp):
+            self._set_center_readout(t, g, r)
+            self._draw_gauge(b, g, r, e)
+
+        self._run_on_ui(_ui)
 
     def _do_incubation(self):
         target = float(STEP_INCUBATION_TEMP_C)
@@ -549,13 +587,17 @@ class ProcedureGUI:
         duration_s = minutes * 60.0
         self._log_msg(f"Incubation: {target:g}°C for {minutes:g} min")
 
-        def _show_start():
-            self._temp_display.set("--.- °C")
-            self._target_display.set(f"Target {target:.0f} °C")
-            self._time_display.set(self._format_remaining(duration_s))
-            self._draw_gauge(0, target, duration_s, 0)
+        shown = threading.Event()
 
-        self.root.after(0, _show_start)
+        def _show_start():
+            self._set_center_readout(None, target, duration_s)
+            self._draw_gauge(0, target, duration_s, 0)
+            shown.set()
+
+        self._run_on_ui(_show_start)
+        if not shown.wait(timeout=2.0):
+            self._log_msg("Warning: UI did not update before incubation start")
+
         Start_incubation(target, minutes, on_tick=self._incubation_tick)
 
     def _do_pictures(self):
@@ -564,15 +606,6 @@ class ProcedureGUI:
         exp = capture_petri_dishes(n)
         step_05_post_imaging_cleanup()
         self._log_msg(f"Saved: {exp}")
-
-    def _run_incubation_only(self):
-        pass
-
-    def _run_pictures_only(self):
-        pass
-
-    def _run_incubation_imaging(self):
-        pass
 
     def _do_incubation_imaging(self):
         self._validate_study_settings()
@@ -587,7 +620,7 @@ class ProcedureGUI:
         self._log_msg(f"  Rounds on: {rnd_on} mins={pics}")
 
         def on_log(msg):
-            self.root.after(0, lambda m=msg: self._log_msg(m))
+            self._log_msg(msg)
 
         exp = run_incubation_imaging_study(
             num_petri_dishes=n,
