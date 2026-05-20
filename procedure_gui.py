@@ -71,6 +71,8 @@ LEFT_BTN_WIDTH_SCALE = 1.4
 LEFT_PANEL_MIN_WIDTH = int(round(180 * LEFT_BTN_WIDTH_SCALE))
 MAIN_BTN_HEIGHT = 40
 SMALL_BTN_HEIGHT = 26
+PETRI_STEPPER_BTN_HEIGHT = 38
+PETRI_STEPPER_BTN_FONT = ("Segoe UI", 12, "bold")
 LEFT_BTN_GAP = 4
 
 
@@ -339,7 +341,16 @@ class ProcedureGUI:
         for i in range(NUM_PICTURE_SLOTS):
             self._picture_enabled[i].set(i < count)
 
-    def _adj_btn(self, parent, text, command, width=3):
+    def _adj_btn(
+        self,
+        parent,
+        text,
+        command,
+        width=3,
+        height=None,
+        font=None,
+        min_width=0,
+    ):
         return self._mk_round_btn(
             parent,
             text,
@@ -347,10 +358,11 @@ class ProcedureGUI:
             color=CARD,
             fg=TEXT,
             hover=SELECTED,
-            height=SMALL_BTN_HEIGHT,
-            font=ADJ_FONT,
+            height=height or SMALL_BTN_HEIGHT,
+            font=font or ADJ_FONT,
             radius=6,
             stretch=False,
+            min_width=min_width,
         )
 
     def _widget_bg(self, parent):
@@ -520,7 +532,10 @@ class ProcedureGUI:
             row,
             "−",
             lambda: self._petri_count.set(max(1, int(self._petri_count.get()) - 1)),
-        ).pack(side=tk.LEFT)
+            height=PETRI_STEPPER_BTN_HEIGHT,
+            font=PETRI_STEPPER_BTN_FONT,
+            min_width=44,
+        ).pack(side=tk.LEFT, padx=(0, 4))
         tk.Label(
             row,
             textvariable=self._petri_count,
@@ -538,7 +553,10 @@ class ProcedureGUI:
             lambda: self._petri_count.set(
                 min(MAX_PETRI_DISHES, int(self._petri_count.get()) + 1)
             ),
-        ).pack(side=tk.LEFT)
+            height=PETRI_STEPPER_BTN_HEIGHT,
+            font=PETRI_STEPPER_BTN_FONT,
+            min_width=44,
+        ).pack(side=tk.LEFT, padx=(4, 0))
 
     def _bump_temp(self, var, direction):
         presets = list(INCUBATION_TEMP_OPTIONS)
