@@ -67,6 +67,8 @@ SMALL_FONT = ("Segoe UI", 8)
 VALUE_FONT = ("Segoe UI", 10, "bold")
 BTN_RADIUS = 8
 LEFT_BTN_HEIGHT = int(round(40 * 1.3))  # left step buttons only
+LEFT_BTN_WIDTH_SCALE = 1.4
+LEFT_PANEL_MIN_WIDTH = int(round(180 * LEFT_BTN_WIDTH_SCALE))
 MAIN_BTN_HEIGHT = 40
 SMALL_BTN_HEIGHT = 26
 LEFT_BTN_GAP = 4
@@ -155,11 +157,13 @@ class ProcedureGUI:
         outer = tk.Frame(self.root, bg=BG, padx=12, pady=10)
         outer.grid(row=0, column=0, sticky="nsew")
         outer.columnconfigure(1, weight=1)
+        outer.columnconfigure(0, minsize=LEFT_PANEL_MIN_WIDTH)
         outer.rowconfigure(0, weight=1)
 
         # --- Left: steps (top) + Close (bottom) ---
-        left = tk.Frame(outer, bg=PANEL, padx=10, pady=10)
+        left = tk.Frame(outer, bg=PANEL, padx=10, pady=10, width=LEFT_PANEL_MIN_WIDTH)
         left.grid(row=0, column=0, sticky="nsew")
+        left.grid_propagate(False)
 
         left_steps = tk.Frame(left, bg=PANEL)
         left_steps.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -170,7 +174,7 @@ class ProcedureGUI:
             ("Shift for Incubation", step_03_shift_for_incubation),
             ("Start Incubation", None),
         ]:
-            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=LEFT_BTN_GAP)
+            self._mk_left_btn(left_steps, label, fn).pack(fill=tk.X, pady=LEFT_BTN_GAP)
 
         self._petri_stepper_row(left_steps)
 
@@ -178,7 +182,7 @@ class ProcedureGUI:
             ("Take Pictures", None),
             ("Sterilize", step_06_sterilize),
         ]:
-            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=LEFT_BTN_GAP)
+            self._mk_left_btn(left_steps, label, fn).pack(fill=tk.X, pady=LEFT_BTN_GAP)
 
         self._mk_round_btn(
             left,
@@ -236,6 +240,7 @@ class ProcedureGUI:
             None,
             ACCENT3,
             height=MAIN_BTN_HEIGHT,
+            stretch=True,
         ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
 
         scroll_host = tk.Frame(right_outer, bg=PANEL)
@@ -426,15 +431,19 @@ class ProcedureGUI:
         redraw()
         return wrap
 
-    def _mk_btn(self, parent, text, command, color=ACCENT, width=20, height=LEFT_BTN_HEIGHT):
+    def _mk_btn(self, parent, text, command, color=ACCENT, width=20, height=LEFT_BTN_HEIGHT, stretch=True):
         return self._mk_round_btn(
             parent,
             text,
             lambda t=text, f=command: self._run_action(t, f),
             color=color,
             height=height,
-            stretch=True,
+            stretch=stretch,
         )
+
+    def _mk_left_btn(self, parent, text, command, color=ACCENT):
+        """Left column action button (taller and wider than default)."""
+        return self._mk_btn(parent, text, command, color=color, height=LEFT_BTN_HEIGHT, stretch=True)
 
     def _incub_slot_row(self, parent, index, temp_var, time_var, enabled_var):
         head = tk.Frame(parent, bg=PANEL)
