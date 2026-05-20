@@ -65,6 +65,11 @@ ADJ_FONT = ("Segoe UI", 10, "bold")
 PRESET_FONT = ("Segoe UI", 8)
 SMALL_FONT = ("Segoe UI", 8)
 VALUE_FONT = ("Segoe UI", 10, "bold")
+BTN_RADIUS = 10
+LEFT_BTN_HEIGHT = 46
+MAIN_BTN_HEIGHT = 44
+SMALL_BTN_HEIGHT = 30
+LEFT_BTN_GAP = 6
 
 
 class ProcedureGUI:
@@ -159,17 +164,13 @@ class ProcedureGUI:
         left_steps = tk.Frame(left, bg=PANEL)
         left_steps.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        tk.Label(left_steps, text="Steps", bg=PANEL, fg=TEXT, font=("Segoe UI", 12, "bold")).pack(
-            anchor="w", pady=(0, 8)
-        )
-
         for label, fn in [
             ("All Home", step_01_all_home),
             ("Insert Petri Dishes", step_02_insert_petri_dishes),
             ("Shift for Incubation", step_03_shift_for_incubation),
             ("Start Incubation", None),
         ]:
-            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=3)
+            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=LEFT_BTN_GAP)
 
         self._petri_stepper_row(left_steps)
 
@@ -177,22 +178,16 @@ class ProcedureGUI:
             ("Take Pictures", None),
             ("Sterilize", step_06_sterilize),
         ]:
-            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=3)
+            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=LEFT_BTN_GAP)
 
-        tk.Button(
+        self._mk_round_btn(
             left,
-            text="Close",
-            command=self._on_close,
-            bg=CLOSE_BTN,
+            "Close",
+            self._on_close,
+            color=CLOSE_BTN,
             fg=TEXT,
-            activebackground="#d46a66",
-            activeforeground=TEXT,
-            relief=tk.FLAT,
-            padx=5,
-            pady=10,
-            font=BTN_FONT,
-            cursor="hand2",
-            width=20,
+            hover="#d46a66",
+            height=MAIN_BTN_HEIGHT,
         ).pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
         # --- Center ---
@@ -223,18 +218,27 @@ class ProcedureGUI:
         # --- Right: scrollable settings ---
         right_outer = tk.Frame(outer, bg=PANEL, padx=6, pady=6)
         right_outer.grid(row=0, column=2, sticky="nsew")
-        right_outer.rowconfigure(1, weight=1)
+        right_outer.rowconfigure(2, weight=1)
         right_outer.columnconfigure(0, weight=1)
+
+        tk.Label(
+            right_outer,
+            text="Test the Device",
+            bg=PANEL,
+            fg=TEXT,
+            font=("Segoe UI", 12, "bold"),
+        ).grid(row=0, column=0, sticky="ew", pady=(0, 6))
 
         self._mk_btn(
             right_outer,
             "Start Incubation + Imaging",
             None,
             ACCENT3,
-        ).grid(row=0, column=0, sticky="ew", pady=(0, 6))
+            height=MAIN_BTN_HEIGHT,
+        ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
 
         scroll_host = tk.Frame(right_outer, bg=PANEL)
-        scroll_host.grid(row=1, column=0, sticky="nsew")
+        scroll_host.grid(row=2, column=0, sticky="nsew")
         scroll_host.rowconfigure(0, weight=1)
         scroll_host.columnconfigure(0, weight=1)
 
@@ -308,19 +312,18 @@ class ProcedureGUI:
         row.pack(fill=tk.X, pady=(0, 3))
         tk.Label(row, text=label, bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
         for count, text in options:
-            tk.Button(
+            self._mk_round_btn(
                 row,
-                text=text,
-                command=lambda c=count: setter(c),
-                bg=CARD,
+                text,
+                lambda c=count: setter(c),
+                color=CARD,
                 fg=TEXT,
-                activebackground=SELECTED,
-                relief=tk.FLAT,
-                padx=4,
-                pady=1,
+                hover=SELECTED,
+                height=SMALL_BTN_HEIGHT,
                 font=PRESET_FONT,
-                cursor="hand2",
-            ).pack(side=tk.LEFT, padx=1)
+                radius=6,
+                min_width=30,
+            ).pack(side=tk.LEFT, padx=2)
 
     def _set_incub_count(self, count):
         for i in range(NUM_INCUBATION_SLOTS):
@@ -331,19 +334,95 @@ class ProcedureGUI:
             self._picture_enabled[i].set(i < count)
 
     def _adj_btn(self, parent, text, command, width=3):
-        return tk.Button(
+        return self._mk_round_btn(
             parent,
-            text=text,
-            command=command,
-            width=width,
-            bg=CARD,
+            text,
+            command,
+            color=CARD,
             fg=TEXT,
-            activebackground=SELECTED,
-            relief=tk.FLAT,
+            hover=SELECTED,
+            height=SMALL_BTN_HEIGHT,
             font=ADJ_FONT,
-            padx=3,
-            pady=3,
+            radius=6,
+            min_width=36,
+        )
+
+    def _widget_bg(self, parent):
+        try:
+            return parent.cget("bg")
+        except tk.TclError:
+            return PANEL
+
+    def _paint_round_rect(self, canvas, x1, y1, x2, y2, r, fill):
+        r = max(1, min(r, (x2 - x1) // 2, (y2 - y1) // 2))
+        canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline=fill)
+        canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline=fill)
+        canvas.create_oval(x1, y1, x1 + 2 * r, y1 + 2 * r, fill=fill, outline=fill)
+        canvas.create_oval(x2 - 2 * r, y1, x2, y1 + 2 * r, fill=fill, outline=fill)
+        canvas.create_oval(x1, y2 - 2 * r, x1 + 2 * r, y2, fill=fill, outline=fill)
+        canvas.create_oval(x2 - 2 * r, y2 - 2 * r, x2, y2, fill=fill, outline=fill)
+
+    def _mk_round_btn(
+        self,
+        parent,
+        text,
+        command,
+        color=ACCENT,
+        fg="#0d1520",
+        hover=None,
+        height=LEFT_BTN_HEIGHT,
+        font=BTN_FONT,
+        radius=BTN_RADIUS,
+        min_width=0,
+    ):
+        """Canvas button with rounded corners."""
+        bg = self._widget_bg(parent)
+        hover = hover or color
+        wrap = tk.Frame(parent, bg=bg)
+        canvas = tk.Canvas(
+            wrap,
+            height=height,
+            bg=bg,
+            highlightthickness=0,
+            bd=0,
             cursor="hand2",
+        )
+        canvas.pack(fill=tk.X, expand=True)
+        state = {"fill": color}
+
+        def redraw(_event=None):
+            canvas.delete("all")
+            w = max(canvas.winfo_width(), min_width or 80)
+            h = height
+            self._paint_round_rect(canvas, 1, 1, w - 1, h - 1, radius, state["fill"])
+            canvas.create_text(w / 2, h / 2, text=text, fill=fg, font=font)
+
+        def on_click(_event):
+            command()
+
+        def on_enter(_event):
+            state["fill"] = hover
+            redraw()
+
+        def on_leave(_event):
+            state["fill"] = color
+            redraw()
+
+        canvas.bind("<Configure>", redraw)
+        canvas.bind("<Button-1>", on_click)
+        canvas.bind("<Enter>", on_enter)
+        canvas.bind("<Leave>", on_leave)
+        if min_width:
+            wrap.configure(width=min_width)
+        return wrap
+
+    def _mk_btn(self, parent, text, command, color=ACCENT, width=20, height=LEFT_BTN_HEIGHT):
+        return self._mk_round_btn(
+            parent,
+            text,
+            lambda t=text, f=command: self._run_action(t, f),
+            color=color,
+            height=height,
         )
 
     def _incub_slot_row(self, parent, index, temp_var, time_var, enabled_var):
@@ -472,22 +551,6 @@ class ProcedureGUI:
         self._gauge_r = min(event.width, event.height) // 2 - 12
         if not self._busy:
             self._draw_idle_gauge()
-
-    def _mk_btn(self, parent, text, command, color=ACCENT, width=20):
-        return tk.Button(
-            parent,
-            text=text,
-            width=width,
-            command=lambda t=text, f=command: self._run_action(t, f),
-            bg=color,
-            fg="#0d1520",
-            activebackground="#8ab4e8",
-            relief=tk.FLAT,
-            padx=5,
-            pady=10,
-            font=BTN_FONT,
-            cursor="hand2",
-        )
 
     def _run_on_ui(self, fn):
         """Schedule GUI work on the Tk main thread (safe from worker threads)."""
