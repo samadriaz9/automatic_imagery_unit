@@ -453,10 +453,14 @@ class ProcedureGUI:
         block.pack(fill=tk.X, pady=2)
         self._round_row_frames.append(block)
 
-        head = tk.Frame(block, bg=PANEL)
-        head.pack(fill=tk.X)
+        ctrl_box = tk.Frame(block, bg=PANEL)
+        ctrl_box.pack(fill=tk.X, pady=(4, 0))
+
+        trow = tk.Frame(ctrl_box, bg=PANEL)
+        trow.pack(anchor="center", pady=(0, 8))
+        gap = int(round(8 * ROUND_SCALE))
         tk.Checkbutton(
-            head,
+            trow,
             text="",
             variable=enabled_var,
             bg=PANEL,
@@ -465,17 +469,10 @@ class ProcedureGUI:
             activebackground=PANEL,
             activeforeground=TEXT,
             font=ROUND_ON_INDICATOR,
-            padx=4,
-            pady=4,
+            padx=(0, gap),
+            pady=2,
             command=self._refresh_round_highlight,
-        ).pack(side=tk.RIGHT)
-
-        ctrl_box = tk.Frame(block, bg=PANEL)
-        ctrl_box.pack(fill=tk.X, pady=(6, 0))
-
-        trow = tk.Frame(ctrl_box, bg=PANEL)
-        trow.pack(anchor="center", pady=(0, 8))
-        gap = int(round(8 * ROUND_SCALE))
+        ).pack(side=tk.LEFT)
         self._round_temp_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(
             side=tk.LEFT, padx=(0, gap)
         )
