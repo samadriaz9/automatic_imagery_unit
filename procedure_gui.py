@@ -67,6 +67,10 @@ BTN_RADIUS = 8
 LEFT_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))  # left step buttons (height ×1.3 twice)
 LEFT_BTN_WIDTH_SCALE = 1.4
 LEFT_PANEL_MIN_WIDTH = int(round(180 * LEFT_BTN_WIDTH_SCALE))
+CENTER_PANEL_WIDTH = 400
+RIGHT_PANEL_MIN_WIDTH = 340
+STUDY_BTN_HEIGHT = int(round(40 * 1.3))
+STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
 MAIN_BTN_HEIGHT = 40
 SMALL_BTN_HEIGHT = 26
 PETRI_STEPPER_BTN_HEIGHT = 38
@@ -152,8 +156,9 @@ class ProcedureGUI:
 
         outer = tk.Frame(self.root, bg=BG, padx=12, pady=10)
         outer.grid(row=0, column=0, sticky="nsew")
-        outer.columnconfigure(1, weight=1)
-        outer.columnconfigure(0, minsize=LEFT_PANEL_MIN_WIDTH)
+        outer.columnconfigure(0, minsize=LEFT_PANEL_MIN_WIDTH, weight=0)
+        outer.columnconfigure(1, weight=0)
+        outer.columnconfigure(2, minsize=RIGHT_PANEL_MIN_WIDTH, weight=1)
         outer.rowconfigure(0, weight=1)
 
         # --- Left: steps (top) + Close (bottom) ---
@@ -192,9 +197,10 @@ class ProcedureGUI:
             stretch=True,
         ).pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
-        # --- Center ---
-        center = tk.Frame(outer, bg=BG, padx=12)
-        center.grid(row=0, column=1, sticky="nsew")
+        # --- Center (fixed width) ---
+        center = tk.Frame(outer, bg=BG, padx=8, width=CENTER_PANEL_WIDTH)
+        center.grid(row=0, column=1, sticky="ns")
+        center.grid_propagate(False)
         center.columnconfigure(0, weight=1)
         center.rowconfigure(3, weight=1)
 
@@ -217,9 +223,12 @@ class ProcedureGUI:
         )
         self._log.grid(row=3, column=0, sticky="nsew")
 
-        # --- Right: incubation + imaging rounds ---
-        right_outer = tk.Frame(outer, bg=PANEL, padx=8, pady=8)
+        # --- Right: incubation + imaging rounds (wider column) ---
+        right_outer = tk.Frame(
+            outer, bg=PANEL, padx=10, pady=8, width=RIGHT_PANEL_MIN_WIDTH
+        )
         right_outer.grid(row=0, column=2, sticky="nsew")
+        right_outer.grid_propagate(False)
         right_outer.columnconfigure(0, weight=1)
 
         self._mk_btn(
@@ -227,8 +236,9 @@ class ProcedureGUI:
             STUDY_BTN_TITLE,
             None,
             ACCENT3,
-            height=MAIN_BTN_HEIGHT,
+            height=STUDY_BTN_HEIGHT,
             stretch=True,
+            min_width=STUDY_BTN_MIN_WIDTH,
         ).pack(fill=tk.X, pady=(0, 10))
 
         rounds_box = tk.Frame(right_outer, bg=PANEL)
@@ -322,6 +332,8 @@ class ProcedureGUI:
         def redraw(_event=None):
             canvas.delete("all")
             w = canvas.winfo_width() if stretch else compact_w
+            if stretch and min_width:
+                w = max(w, min_width)
             if w < 4:
                 w = compact_w
             h = height
@@ -356,6 +368,7 @@ class ProcedureGUI:
         height=LEFT_BTN_HEIGHT,
         stretch=True,
         font=BTN_FONT,
+        min_width=0,
     ):
         return self._mk_round_btn(
             parent,
@@ -365,6 +378,7 @@ class ProcedureGUI:
             height=height,
             font=font,
             stretch=stretch,
+            min_width=min_width,
         )
 
     def _mk_left_btn(self, parent, text, command, color=ACCENT):
