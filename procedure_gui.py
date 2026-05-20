@@ -66,7 +66,7 @@ PRESET_FONT = ("Segoe UI", 8)
 SMALL_FONT = ("Segoe UI", 8)
 VALUE_FONT = ("Segoe UI", 10, "bold")
 BTN_RADIUS = 8
-LEFT_BTN_HEIGHT = 40
+LEFT_BTN_HEIGHT = int(round(40 * 1.3))  # left step buttons only
 MAIN_BTN_HEIGHT = 40
 SMALL_BTN_HEIGHT = 26
 LEFT_BTN_GAP = 4
@@ -187,7 +187,7 @@ class ProcedureGUI:
             color=CLOSE_BTN,
             fg=TEXT,
             hover="#d46a66",
-            height=MAIN_BTN_HEIGHT,
+            height=LEFT_BTN_HEIGHT,
             stretch=True,
         ).pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
@@ -235,6 +235,7 @@ class ProcedureGUI:
             "Start Incubation + Imaging",
             None,
             ACCENT3,
+            height=MAIN_BTN_HEIGHT,
         ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
 
         scroll_host = tk.Frame(right_outer, bg=PANEL)
