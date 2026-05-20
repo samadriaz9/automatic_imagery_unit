@@ -12,6 +12,8 @@ from device_config import (
     DEFAULT_INCUBATION_SLOT_ENABLED,
     DEFAULT_INCUBATION_SLOT_TEMPS,
     DEFAULT_INCUBATION_SLOT_TIMES,
+    STEP_INCUBATION_MINUTES,
+    STEP_INCUBATION_TEMP_C,
     DEFAULT_PICTURE_ROUND_ENABLED,
     IMAGING_COLS,
     IMAGING_ROWS,
@@ -54,29 +56,17 @@ def step_03_shift_for_incubation():
     incubator_lid_down(400)
 
 
-def step_04_incubation(
-    incubation_temps=None,
-    incubation_times=None,
-    incubation_enabled=None,
-    on_tick=None,
-):
-    """Step 4: Run enabled incubation slots (temp + duration each)."""
-    temps = list(incubation_temps or DEFAULT_INCUBATION_SLOT_TEMPS)
-    times = list(incubation_times or DEFAULT_INCUBATION_SLOT_TIMES)
-    enabled = list(incubation_enabled or DEFAULT_INCUBATION_SLOT_ENABLED)
-    while len(temps) < NUM_INCUBATION_SLOTS:
-        temps.append(temps[-1] if temps else 37.0)
-    while len(times) < NUM_INCUBATION_SLOTS:
-        times.append(times[-1] if times else 1.0)
-    while len(enabled) < NUM_INCUBATION_SLOTS:
-        enabled.append(False)
-    if not any(enabled[:NUM_INCUBATION_SLOTS]):
-        raise ValueError("Enable at least one incubation slot")
-    for i in range(NUM_INCUBATION_SLOTS):
-        if not enabled[i]:
-            continue
-        print(f"[Step 4] Slot {i + 1}: {temps[i]:g}°C for {times[i]:g} min")
-        Start_incubation(float(temps[i]), float(times[i]), on_tick=on_tick)
+def step_04_incubation(on_tick=None):
+    """Step 4: Hold sample at 37 °C for 2 minutes."""
+    print(
+        f"[Step 4] Incubation {STEP_INCUBATION_TEMP_C:g}°C "
+        f"for {STEP_INCUBATION_MINUTES:g} min"
+    )
+    Start_incubation(
+        STEP_INCUBATION_TEMP_C,
+        STEP_INCUBATION_MINUTES,
+        on_tick=on_tick,
+    )
 
 
 def step_05_prepare_imaging():

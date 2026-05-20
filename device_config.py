@@ -14,6 +14,10 @@ PETRI_TRAY_ROWS = 2
 PETRI_TRAY_COLS = 5
 MAX_PETRI_DISHES = PETRI_TRAY_ROWS * PETRI_TRAY_COLS
 
+# Steps panel — quick incubation (Start Incubation button)
+STEP_INCUBATION_TEMP_C = 37.0
+STEP_INCUBATION_MINUTES = 2.0
+
 # Incubation GUI — 3 slots (temp + duration each)
 NUM_INCUBATION_SLOTS = 3
 INCUBATION_TEMP_OPTIONS = (30, 37, 44)
