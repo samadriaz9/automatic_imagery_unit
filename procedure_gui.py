@@ -342,14 +342,17 @@ class ProcedureGUI:
         except tk.TclError:
             return PANEL
 
-    def _paint_round_rect(self, canvas, x1, y1, x2, y2, r, fill):
+    def _paint_round_rect(self, canvas, x1, y1, x2, y2, r, fill, tag=None):
         r = max(1, min(r, (x2 - x1) // 2, (y2 - y1) // 2))
-        canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline=fill)
-        canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline=fill)
-        canvas.create_oval(x1, y1, x1 + 2 * r, y1 + 2 * r, fill=fill, outline=fill)
-        canvas.create_oval(x2 - 2 * r, y1, x2, y1 + 2 * r, fill=fill, outline=fill)
-        canvas.create_oval(x1, y2 - 2 * r, x1 + 2 * r, y2, fill=fill, outline=fill)
-        canvas.create_oval(x2 - 2 * r, y2 - 2 * r, x2, y2, fill=fill, outline=fill)
+        opts = {"fill": fill, "outline": fill}
+        if tag:
+            opts["tags"] = (tag,)
+        canvas.create_rectangle(x1 + r, y1, x2 - r, y2, **opts)
+        canvas.create_rectangle(x1, y1 + r, x2, y2 - r, **opts)
+        canvas.create_oval(x1, y1, x1 + 2 * r, y1 + 2 * r, **opts)
+        canvas.create_oval(x2 - 2 * r, y1, x2, y1 + 2 * r, **opts)
+        canvas.create_oval(x1, y2 - 2 * r, x1 + 2 * r, y2, **opts)
+        canvas.create_oval(x2 - 2 * r, y2 - 2 * r, x2, y2, **opts)
 
     def _mk_round_btn(
         self,
@@ -463,6 +466,10 @@ class ProcedureGUI:
         block_shell._round_canvas = canvas
         block_shell._round_inner = block
         block_shell._round_bg = PANEL
+        win_id = canvas.create_window(
+            ROUND_BLOCK_PAD, ROUND_BLOCK_PAD, window=block, anchor="nw"
+        )
+        cfg_after = [None]
 
         def _redraw_round_shell(bg=None):
             if bg is not None:
@@ -470,18 +477,37 @@ class ProcedureGUI:
             bg = block_shell._round_bg
             block.update_idletasks()
             ih = block.winfo_reqheight()
-            shell_w = max(block_shell.winfo_width(), block.winfo_reqwidth() + 2 * ROUND_BLOCK_PAD, 1)
-            ch = ih + 2 * ROUND_BLOCK_PAD
-            canvas.config(height=ch)
-            canvas.delete("all")
-            self._paint_round_rect(
-                canvas, 2, 2, shell_w - 2, ch - 2, ROUND_BLOCK_RADIUS, bg
+            shell_w = max(
+                block_shell.winfo_width(),
+                block.winfo_reqwidth() + 2 * ROUND_BLOCK_PAD,
+                1,
             )
-            canvas.create_window(ROUND_BLOCK_PAD, ROUND_BLOCK_PAD, window=block, anchor="nw")
+            ch = max(ih + 2 * ROUND_BLOCK_PAD, 1)
+            canvas.config(height=ch)
+            canvas.coords(win_id, ROUND_BLOCK_PAD, ROUND_BLOCK_PAD)
+            canvas.delete("round_bg")
+            self._paint_round_rect(
+                canvas,
+                2,
+                2,
+                shell_w - 2,
+                ch - 2,
+                ROUND_BLOCK_RADIUS,
+                bg,
+                tag="round_bg",
+            )
+            canvas.tag_lower("round_bg")
+
+        def _schedule_redraw(_event=None):
+            if cfg_after[0] is not None:
+                try:
+                    canvas.after_cancel(cfg_after[0])
+                except tk.TclError:
+                    pass
+            cfg_after[0] = canvas.after(80, _redraw_round_shell)
 
         block_shell._round_redraw = _redraw_round_shell
-        block.bind("<Configure>", lambda _e: _redraw_round_shell())
-        block_shell.bind("<Configure>", lambda _e: _redraw_round_shell())
+        block_shell.bind("<Configure>", _schedule_redraw)
 
         ctrl_box = tk.Frame(block, bg=PANEL)
         ctrl_box.pack(fill=tk.X, pady=(2, 0))
