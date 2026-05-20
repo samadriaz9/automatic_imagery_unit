@@ -11,8 +11,10 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext
 
 from device_config import (
+    DEFAULT_INCUBATION_SLOT_ENABLED,
     DEFAULT_INCUBATION_SLOT_TEMPS,
     DEFAULT_INCUBATION_SLOT_TIMES,
+    DEFAULT_PICTURE_ROUND_ENABLED,
     DEFAULT_PICTURE_TIMES,
     INCUBATION_MIN_MAX,
     INCUBATION_MIN_MIN,
@@ -54,6 +56,9 @@ TEXT = "#eef2f8"
 MUTED = "#9aa5b8"
 WARN = "#e8a87c"
 CLOSE_BTN = "#b85450"
+BTN_FONT = ("Segoe UI", 12, "bold")
+ADJ_FONT = ("Segoe UI", 11, "bold")
+PRESET_FONT = ("Segoe UI", 9, "bold")
 
 
 class ProcedureGUI:
@@ -78,6 +83,14 @@ class ProcedureGUI:
         ]
         self._picture_times = [
             tk.IntVar(value=DEFAULT_PICTURE_TIMES[i]) for i in range(NUM_PICTURE_SLOTS)
+        ]
+        self._incub_enabled = [
+            tk.BooleanVar(value=DEFAULT_INCUBATION_SLOT_ENABLED[i])
+            for i in range(NUM_INCUBATION_SLOTS)
+        ]
+        self._picture_enabled = [
+            tk.BooleanVar(value=DEFAULT_PICTURE_ROUND_ENABLED[i])
+            for i in range(NUM_PICTURE_SLOTS)
         ]
 
         self._canvas = None
@@ -150,14 +163,13 @@ class ProcedureGUI:
             ("Take Pictures", self._run_pictures_only),
             ("Sterilize", step_06_sterilize),
         ]:
-            self._mk_btn(left_steps, label, fn, width=20).pack(fill=tk.X, pady=4)
+            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=5)
 
         self._mk_btn(
             left_steps,
             "Start Incubation + Imaging",
             self._run_incubation_imaging,
             ACCENT3,
-            width=20,
         ).pack(fill=tk.X, pady=(14, 0))
 
         tk.Button(
@@ -169,11 +181,11 @@ class ProcedureGUI:
             activebackground="#d46a66",
             activeforeground=TEXT,
             relief=tk.FLAT,
-            padx=4,
-            pady=12,
-            font=("Segoe UI", 11, "bold"),
+            padx=6,
+            pady=14,
+            font=BTN_FONT,
             cursor="hand2",
-            width=20,
+            width=22,
         ).pack(side=tk.BOTTOM, fill=tk.X, pady=(16, 0))
 
         # --- Center ---
@@ -213,17 +225,26 @@ class ProcedureGUI:
         self._log.grid(row=3, column=0, sticky="nsew")
 
         # --- Right: settings ---
-        right = tk.Frame(outer, bg=PANEL, padx=12, pady=10, width=300)
+        right = tk.Frame(outer, bg=PANEL, padx=12, pady=10, width=320)
         right.grid(row=0, column=2, sticky="ns")
         tk.Label(right, text="Settings", bg=PANEL, fg=TEXT, font=("Segoe UI", 12, "bold")).pack(
             anchor="w", pady=(0, 8)
         )
 
         inc = self._section(right, "Incubation")
+        self._preset_row(inc, "Use slots:", [(1, "1"), (2, "2"), (3, "3"), (3, "All")], self._set_incub_count)
         for i in range(NUM_INCUBATION_SLOTS):
-            self._incub_slot_row(inc, i + 1, self._incub_temps[i], self._incub_times[i])
+            self._incub_slot_row(
+                inc, i + 1, self._incub_temps[i], self._incub_times[i], self._incub_enabled[i]
+            )
 
         img = self._section(right, "Imagery Settings")
+        self._preset_row(
+            img,
+            "Use rounds:",
+            [(1, "1"), (2, "2"), (3, "3"), (4, "4"), (5, "5"), (5, "All")],
+            self._set_round_count,
+        )
         self._stepper_row(
             img,
             "Petri dishes",
@@ -240,33 +261,73 @@ class ProcedureGUI:
             font=("Segoe UI", 8),
         ).pack(anchor="w", pady=(2, 4))
         for i in range(NUM_PICTURE_SLOTS):
-            self._round_time_row(img, i + 1, self._picture_times[i])
+            self._round_time_row(
+                img, i + 1, self._picture_times[i], self._picture_enabled[i]
+            )
 
-    def _adj_btn(self, parent, text, command):
+    def _preset_row(self, parent, label, options, setter):
+        row = tk.Frame(parent, bg=PANEL)
+        row.pack(fill=tk.X, pady=(2, 6))
+        tk.Label(row, text=label, bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side=tk.LEFT)
+        for count, text in options:
+            tk.Button(
+                row,
+                text=text,
+                command=lambda c=count: setter(c),
+                bg=CARD,
+                fg=TEXT,
+                activebackground=SELECTED,
+                relief=tk.FLAT,
+                padx=8,
+                pady=4,
+                font=PRESET_FONT,
+                cursor="hand2",
+            ).pack(side=tk.LEFT, padx=2)
+
+    def _set_incub_count(self, count):
+        for i in range(NUM_INCUBATION_SLOTS):
+            self._incub_enabled[i].set(i < count)
+
+    def _set_round_count(self, count):
+        for i in range(NUM_PICTURE_SLOTS):
+            self._picture_enabled[i].set(i < count)
+
+    def _adj_btn(self, parent, text, command, width=4):
         return tk.Button(
             parent,
             text=text,
             command=command,
-            width=3,
+            width=width,
             bg=CARD,
             fg=TEXT,
             activebackground=SELECTED,
             relief=tk.FLAT,
-            font=("Segoe UI", 10, "bold"),
+            font=ADJ_FONT,
+            padx=6,
+            pady=6,
             cursor="hand2",
         )
 
-    def _incub_slot_row(self, parent, index, temp_var, time_var):
-        tk.Label(
-            parent,
+    def _slot_header(self, parent, index, enabled_var):
+        row = tk.Frame(parent, bg=PANEL)
+        row.pack(fill=tk.X, pady=(8 if index > 1 else 4, 2))
+        tk.Checkbutton(
+            row,
             text=f"Slot {index}",
+            variable=enabled_var,
             bg=PANEL,
             fg=TEXT,
-            font=("Segoe UI", 9, "bold"),
-        ).pack(anchor="w", pady=(8 if index > 1 else 4, 2))
+            selectcolor=CARD,
+            activebackground=PANEL,
+            activeforeground=TEXT,
+            font=("Segoe UI", 10, "bold"),
+        ).pack(side=tk.LEFT)
+
+    def _incub_slot_row(self, parent, index, temp_var, time_var, enabled_var):
+        self._slot_header(parent, index, enabled_var)
 
         trow = tk.Frame(parent, bg=PANEL)
-        trow.pack(fill=tk.X, pady=1)
+        trow.pack(fill=tk.X, pady=2)
         self._adj_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(side=tk.LEFT)
         tk.Label(trow, text="Temp", bg=PANEL, fg=MUTED, width=5, font=("Segoe UI", 8)).pack(side=tk.LEFT)
         tk.Label(
@@ -277,7 +338,7 @@ class ProcedureGUI:
         self._adj_btn(trow, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(side=tk.LEFT)
 
         mrow = tk.Frame(parent, bg=PANEL)
-        mrow.pack(fill=tk.X, pady=1)
+        mrow.pack(fill=tk.X, pady=2)
         self._adj_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(side=tk.LEFT)
         tk.Label(mrow, text="Time", bg=PANEL, fg=MUTED, width=5, font=("Segoe UI", 8)).pack(side=tk.LEFT)
         tk.Label(
@@ -287,12 +348,22 @@ class ProcedureGUI:
         tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side=tk.LEFT)
         self._adj_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(side=tk.LEFT)
 
-    def _round_time_row(self, parent, index, var):
+    def _round_time_row(self, parent, index, var, enabled_var):
         row = tk.Frame(parent, bg=PANEL)
-        row.pack(fill=tk.X, pady=3)
-        tk.Label(row, text=f"Round {index}", bg=PANEL, fg=TEXT, width=8, anchor="w", font=("Segoe UI", 9)).pack(
-            side=tk.LEFT
-        )
+        row.pack(fill=tk.X, pady=4)
+        tk.Checkbutton(
+            row,
+            text=f"Round {index}",
+            variable=enabled_var,
+            bg=PANEL,
+            fg=TEXT,
+            selectcolor=CARD,
+            activebackground=PANEL,
+            activeforeground=TEXT,
+            font=("Segoe UI", 10, "bold"),
+            width=9,
+            anchor="w",
+        ).pack(side=tk.LEFT)
         self._adj_btn(row, "−", lambda v=var: self._bump_picture_time(v, -1)).pack(side=tk.LEFT)
         tk.Label(row, textvariable=var, bg=PANEL, fg=ACCENT2, font=("Segoe UI", 13, "bold")).pack(
             side=tk.LEFT, expand=True
@@ -342,7 +413,7 @@ class ProcedureGUI:
         if not self._busy:
             self._draw_idle_gauge()
 
-    def _mk_btn(self, parent, text, command, color=ACCENT, width=18):
+    def _mk_btn(self, parent, text, command, color=ACCENT, width=22):
         return tk.Button(
             parent,
             text=text,
@@ -352,9 +423,9 @@ class ProcedureGUI:
             fg="#0d1520",
             activebackground="#8ab4e8",
             relief=tk.FLAT,
-            padx=4,
-            pady=10,
-            font=("Segoe UI", 10, "bold"),
+            padx=6,
+            pady=14,
+            font=BTN_FONT,
             cursor="hand2",
         )
 
@@ -362,21 +433,39 @@ class ProcedureGUI:
         self._log.insert(tk.END, msg + "\n")
         self._log.see(tk.END)
 
-    def _validate_picture_times(self):
-        t1 = int(self._picture_times[0].get())
-        t3 = int(self._picture_times[2].get())
-        if t3 < t1 + MIN_ROUND3_ABOVE_ROUND1_MIN:
-            raise ValueError(
-                f"Round 3 ({t3} min) must be at least {t1 + MIN_ROUND3_ABOVE_ROUND1_MIN} min "
-                f"(Round 1 + {MIN_ROUND3_ABOVE_ROUND1_MIN} min)"
-            )
+    def _enabled_flags(self, vars_list):
+        return [bool(v.get()) for v in vars_list]
+
+    def _validate_study_settings(self):
+        if not any(self._enabled_flags(self._picture_enabled)):
+            raise ValueError("Enable at least one picture round")
+        if not any(self._enabled_flags(self._incub_enabled)):
+            pass  # incubation phase optional for combined study
+        if self._picture_enabled[0].get() and self._picture_enabled[2].get():
+            t1 = int(self._picture_times[0].get())
+            t3 = int(self._picture_times[2].get())
+            if t3 < t1 + MIN_ROUND3_ABOVE_ROUND1_MIN:
+                raise ValueError(
+                    f"Round 3 ({t3} min) must be at least {t1 + MIN_ROUND3_ABOVE_ROUND1_MIN} min "
+                    f"(Round 1 + {MIN_ROUND3_ABOVE_ROUND1_MIN} min)"
+                )
+
+    def _validate_incubation_only(self):
+        if not any(self._enabled_flags(self._incub_enabled)):
+            raise ValueError("Enable at least one incubation slot")
 
     def _run_action(self, title, fn):
         if self._busy:
             return
         if fn is self._run_incubation_imaging:
             try:
-                self._validate_picture_times()
+                self._validate_study_settings()
+            except ValueError as exc:
+                messagebox.showerror("Invalid settings", str(exc))
+                return
+        if fn is self._run_incubation_only:
+            try:
+                self._validate_incubation_only()
             except ValueError as exc:
                 messagebox.showerror("Invalid settings", str(exc))
                 return
@@ -418,6 +507,8 @@ class ProcedureGUI:
 
     def _do_incubation(self):
         for i in range(NUM_INCUBATION_SLOTS):
+            if not self._incub_enabled[i].get():
+                continue
             t = float(self._incub_temps[i].get())
             m = float(self._incub_times[i].get())
             self._log_msg(f"Incubation slot {i + 1}: {t}°C for {m} min")
@@ -440,14 +531,16 @@ class ProcedureGUI:
         pass
 
     def _do_incubation_imaging(self):
-        self._validate_picture_times()
+        self._validate_study_settings()
         n = int(self._petri_count.get())
         temps = [float(self._incub_temps[i].get()) for i in range(3)]
         times = [float(self._incub_times[i].get()) for i in range(3)]
         pics = [int(self._picture_times[i].get()) for i in range(5)]
+        inc_on = self._enabled_flags(self._incub_enabled)
+        rnd_on = self._enabled_flags(self._picture_enabled)
         self._log_msg(f"Incubation + imaging: petri={n}")
-        self._log_msg(f"  Slots: temps={temps}, times={times}")
-        self._log_msg(f"  Rounds: {pics} min")
+        self._log_msg(f"  Slots on: {inc_on} temps={temps} times={times}")
+        self._log_msg(f"  Rounds on: {rnd_on} mins={pics}")
 
         def on_log(msg):
             self.root.after(0, lambda m=msg: self._log_msg(m))
@@ -457,6 +550,8 @@ class ProcedureGUI:
             incubation_temps=temps,
             incubation_times=times,
             picture_times_min=pics,
+            incubation_enabled=inc_on,
+            picture_rounds_enabled=rnd_on,
             on_tick=self._incubation_tick,
             on_log=on_log,
         )
