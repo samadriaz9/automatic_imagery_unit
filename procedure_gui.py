@@ -92,7 +92,8 @@ ROUND_BLOCK_RADIUS = 10
 ROUND_ROW_GAP = 5
 ROUND_CONTROLS_SHIFT = 14
 ROUND_ON_INDICATOR = ("Segoe UI", 13)
-ROUND_BADGE_SIZE = int(round(44 * ROUND_SCALE * 1.6))
+ROUND_BADGE_SIZE = int(round(56 * ROUND_SCALE * 2.2))
+ROUND_BADGE_GAP = int(round(20 * ROUND_SCALE))
 ROUND_BADGE_EDGE = 6
 ROUND_BADGE_OUTLINE = 2
 ROUND_RAINBOW = (
@@ -646,7 +647,9 @@ class ProcedureGUI:
             highlightthickness=0,
             bd=0,
         )
-        canvas.pack(side=tk.RIGHT, padx=(0, ROUND_BADGE_EDGE), anchor="center")
+        canvas.pack(
+            side=tk.RIGHT, padx=(ROUND_BADGE_GAP, ROUND_BADGE_EDGE), anchor="center"
+        )
         r = size // 2
         oval_id = canvas.create_oval(
             pad,
@@ -673,8 +676,8 @@ class ProcedureGUI:
         self._update_round_badge_idle(badge)
         return badge
 
-    def _update_round_badge_idle(self, badge):
-        if self._study_blinking:
+    def _update_round_badge_idle(self, badge, force=False):
+        if self._study_blinking and not force:
             return
         idx = badge["index"]
         row_bg = self._round_row_bg(idx + 1)
@@ -709,14 +712,18 @@ class ProcedureGUI:
         if not self._study_blinking:
             return
         phase = self._badge_blink_phase
+        active = self._active_round
         for badge in self._round_badges:
             idx = badge["index"]
-            row_bg = self._round_row_bg(idx + 1)
-            color = ROUND_RAINBOW[(phase + idx) % len(ROUND_RAINBOW)]
-            canvas = badge["canvas"]
-            canvas.configure(bg=row_bg)
-            canvas.itemconfig(badge["oval"], fill=color, outline=color)
-            canvas.itemconfig(badge["text"], fill=self._badge_label_color(color))
+            if idx + 1 == active and active > 0:
+                row_bg = self._round_row_bg(idx + 1)
+                color = ROUND_RAINBOW[phase % len(ROUND_RAINBOW)]
+                canvas = badge["canvas"]
+                canvas.configure(bg=row_bg)
+                canvas.itemconfig(badge["oval"], fill=color, outline=color)
+                canvas.itemconfig(badge["text"], fill=self._badge_label_color(color))
+            else:
+                self._update_round_badge_idle(badge, force=True)
         self._badge_blink_phase = (phase + 1) % len(ROUND_RAINBOW)
         self._badge_blink_id = self.root.after(ROUND_BLINK_MS, self._tick_round_badge_blink)
 
@@ -743,9 +750,9 @@ class ProcedureGUI:
             self._set_frame_bg(inner, bg)
             shell._round_canvas.configure(bg=PANEL)
             shell._round_redraw(bg)
-        if not self._study_blinking:
-            for badge in self._round_badges:
-                self._update_round_badge_idle(badge)
+        for badge in self._round_badges:
+            if not self._study_blinking or badge["index"] + 1 != active:
+                self._update_round_badge_idle(badge, force=self._study_blinking)
 
     def _highlight_round(self, round_index):
         self._active_round = round_index
