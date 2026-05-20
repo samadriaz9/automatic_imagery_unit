@@ -13,22 +13,17 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext
 
 from device_config import (
-    DEFAULT_INCUBATION_SLOT_ENABLED,
-    DEFAULT_INCUBATION_SLOT_TEMPS,
-    DEFAULT_INCUBATION_SLOT_TIMES,
-    DEFAULT_PICTURE_ROUND_ENABLED,
-    DEFAULT_PICTURE_TIMES,
-    STEP_INCUBATION_MINUTES,
-    STEP_INCUBATION_TEMP_C,
+    DEFAULT_ROUND_ENABLED,
+    DEFAULT_ROUND_TEMPS,
+    DEFAULT_ROUND_TIMES_MIN,
     INCUBATION_MIN_MAX,
     INCUBATION_MIN_MIN,
     INCUBATION_MIN_STEP,
     INCUBATION_TEMP_OPTIONS,
     MAX_PETRI_DISHES,
-    MIN_ROUND3_ABOVE_ROUND1_MIN,
-    NUM_INCUBATION_SLOTS,
-    NUM_PICTURE_SLOTS,
-    PICTURE_TIME_PRESETS,
+    NUM_STUDY_ROUNDS,
+    STEP_INCUBATION_MINUTES,
+    STEP_INCUBATION_TEMP_C,
 )
 from incubation_module import Start_incubation
 from workflow_steps import (
@@ -56,7 +51,9 @@ ACCENT = "#5b9bd5"
 ACCENT2 = "#7ec8a4"
 ACCENT3 = "#c9a55c"
 SELECTED = "#3d6ea8"
+ROUND_ACTIVE = "#4a6fa8"
 TEXT = "#eef2f8"
+STUDY_BTN_TITLE = "Incubation and Imaging"
 MUTED = "#9aa5b8"
 WARN = "#e8a87c"
 CLOSE_BTN = "#b85450"
@@ -93,23 +90,17 @@ class ProcedureGUI:
         self._status_display = tk.StringVar(value="Idle")
 
         self._petri_count = tk.IntVar(value=10)
-        self._incub_temps = [
-            tk.DoubleVar(value=DEFAULT_INCUBATION_SLOT_TEMPS[i]) for i in range(NUM_INCUBATION_SLOTS)
+        self._round_temps = [
+            tk.DoubleVar(value=DEFAULT_ROUND_TEMPS[i]) for i in range(NUM_STUDY_ROUNDS)
         ]
-        self._incub_times = [
-            tk.DoubleVar(value=DEFAULT_INCUBATION_SLOT_TIMES[i]) for i in range(NUM_INCUBATION_SLOTS)
+        self._round_times = [
+            tk.DoubleVar(value=DEFAULT_ROUND_TIMES_MIN[i]) for i in range(NUM_STUDY_ROUNDS)
         ]
-        self._picture_times = [
-            tk.IntVar(value=DEFAULT_PICTURE_TIMES[i]) for i in range(NUM_PICTURE_SLOTS)
+        self._round_enabled = [
+            tk.BooleanVar(value=DEFAULT_ROUND_ENABLED[i]) for i in range(NUM_STUDY_ROUNDS)
         ]
-        self._incub_enabled = [
-            tk.BooleanVar(value=DEFAULT_INCUBATION_SLOT_ENABLED[i])
-            for i in range(NUM_INCUBATION_SLOTS)
-        ]
-        self._picture_enabled = [
-            tk.BooleanVar(value=DEFAULT_PICTURE_ROUND_ENABLED[i])
-            for i in range(NUM_PICTURE_SLOTS)
-        ]
+        self._round_row_frames = []
+        self._active_round = 0
 
         self._canvas = None
         self._gauge_cx = 200
@@ -226,124 +217,32 @@ class ProcedureGUI:
         )
         self._log.grid(row=3, column=0, sticky="nsew")
 
-        # --- Right: scrollable settings ---
-        right_outer = tk.Frame(outer, bg=PANEL, padx=6, pady=6)
+        # --- Right: incubation + imaging rounds ---
+        right_outer = tk.Frame(outer, bg=PANEL, padx=8, pady=8)
         right_outer.grid(row=0, column=2, sticky="nsew")
-        right_outer.rowconfigure(2, weight=1)
         right_outer.columnconfigure(0, weight=1)
-
-        tk.Label(
-            right_outer,
-            text="Test the Device",
-            bg=PANEL,
-            fg=TEXT,
-            font=("Segoe UI", 12, "bold"),
-        ).grid(row=0, column=0, sticky="ew", pady=(0, 6))
 
         self._mk_btn(
             right_outer,
-            "Start Incubation + Imaging",
+            STUDY_BTN_TITLE,
             None,
             ACCENT3,
             height=MAIN_BTN_HEIGHT,
             stretch=True,
-        ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
+        ).pack(fill=tk.X, pady=(0, 10))
 
-        scroll_host = tk.Frame(right_outer, bg=PANEL)
-        scroll_host.grid(row=2, column=0, sticky="nsew")
-        scroll_host.rowconfigure(0, weight=1)
-        scroll_host.columnconfigure(0, weight=1)
-
-        self._settings_canvas = tk.Canvas(scroll_host, bg=PANEL, highlightthickness=0, width=268)
-        sb = tk.Scrollbar(scroll_host, orient=tk.VERTICAL, command=self._settings_canvas.yview)
-        self._settings_canvas.configure(yscrollcommand=sb.set)
-        sb.grid(row=0, column=1, sticky="ns")
-        self._settings_canvas.grid(row=0, column=0, sticky="nsew")
-
-        right = tk.Frame(self._settings_canvas, bg=PANEL, padx=4, pady=2)
-        self._settings_win = self._settings_canvas.create_window((0, 0), window=right, anchor="nw")
-        right.bind("<Configure>", self._on_settings_configure)
-        self._settings_canvas.bind("<Configure>", self._on_settings_canvas_resize)
-        for w in (scroll_host, self._settings_canvas):
-            w.bind("<Enter>", self._bind_settings_scroll)
-            w.bind("<Leave>", self._unbind_settings_scroll)
-
-        inc = self._section(right, "Incubation")
-        self._preset_row(inc, "Use slots:", [(1, "1"), (2, "2"), (3, "3"), (3, "All")], self._set_incub_count)
-        for i in range(NUM_INCUBATION_SLOTS):
-            self._incub_slot_row(
-                inc, i + 1, self._incub_temps[i], self._incub_times[i], self._incub_enabled[i]
+        rounds_box = tk.Frame(right_outer, bg=PANEL)
+        rounds_box.pack(fill=tk.BOTH, expand=True)
+        for i in range(NUM_STUDY_ROUNDS):
+            self._study_round_row(
+                rounds_box,
+                i + 1,
+                self._round_temps[i],
+                self._round_times[i],
+                self._round_enabled[i],
             )
 
-        img = self._section(right, "Imagery")
-        self._preset_row(
-            img,
-            "Use rounds:",
-            [(1, "1"), (2, "2"), (3, "3"), (4, "4"), (5, "5"), (5, "All")],
-            self._set_round_count,
-        )
-        tk.Label(
-            img,
-            text=f"R3 ≥ R1 + {MIN_ROUND3_ABOVE_ROUND1_MIN} min",
-            bg=PANEL,
-            fg=MUTED,
-            font=SMALL_FONT,
-        ).pack(anchor="w", pady=(0, 2))
-        for i in range(NUM_PICTURE_SLOTS):
-            self._round_time_row(
-                img, i + 1, self._picture_times[i], self._picture_enabled[i]
-            )
-
-    def _on_settings_configure(self, _event=None):
-        self._settings_canvas.configure(scrollregion=self._settings_canvas.bbox("all"))
-
-    def _on_settings_canvas_resize(self, event):
-        self._settings_canvas.itemconfig(self._settings_win, width=event.width)
-
-    def _bind_settings_scroll(self, _event=None):
-        self._settings_canvas.bind_all("<MouseWheel>", self._on_settings_wheel)
-        self._settings_canvas.bind_all("<Button-4>", self._on_settings_wheel_up)
-        self._settings_canvas.bind_all("<Button-5>", self._on_settings_wheel_down)
-
-    def _unbind_settings_scroll(self, _event=None):
-        self._settings_canvas.unbind_all("<MouseWheel>")
-        self._settings_canvas.unbind_all("<Button-4>")
-        self._settings_canvas.unbind_all("<Button-5>")
-
-    def _on_settings_wheel(self, event):
-        self._settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-    def _on_settings_wheel_up(self, _event):
-        self._settings_canvas.yview_scroll(-1, "units")
-
-    def _on_settings_wheel_down(self, _event):
-        self._settings_canvas.yview_scroll(1, "units")
-
-    def _preset_row(self, parent, label, options, setter):
-        row = tk.Frame(parent, bg=PANEL)
-        row.pack(fill=tk.X, pady=(0, 3))
-        tk.Label(row, text=label, bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
-        for count, text in options:
-            self._mk_round_btn(
-                row,
-                text,
-                lambda c=count: setter(c),
-                color=CARD,
-                fg=TEXT,
-                hover=SELECTED,
-                height=SMALL_BTN_HEIGHT,
-                font=PRESET_FONT,
-                radius=6,
-                stretch=False,
-            ).pack(side=tk.LEFT, padx=2)
-
-    def _set_incub_count(self, count):
-        for i in range(NUM_INCUBATION_SLOTS):
-            self._incub_enabled[i].set(i < count)
-
-    def _set_round_count(self, count):
-        for i in range(NUM_PICTURE_SLOTS):
-            self._picture_enabled[i].set(i < count)
+        self._refresh_round_highlight()
 
     def _adj_btn(
         self,
@@ -480,65 +379,78 @@ class ProcedureGUI:
             font=LEFT_BTN_FONT,
         )
 
-    def _incub_slot_row(self, parent, index, temp_var, time_var, enabled_var):
-        head = tk.Frame(parent, bg=PANEL)
-        head.pack(fill=tk.X, pady=(4 if index > 1 else 2, 0))
-        tk.Checkbutton(
+    def _study_round_row(self, parent, index, temp_var, time_var, enabled_var):
+        block = tk.Frame(parent, bg=PANEL, padx=4, pady=4)
+        block.pack(fill=tk.X, pady=2)
+        self._round_row_frames.append(block)
+
+        head = tk.Frame(block, bg=PANEL)
+        head.pack(fill=tk.X)
+        tk.Label(
             head,
-            text=f"S{index}",
-            variable=enabled_var,
+            text=f"Round {index}",
             bg=PANEL,
             fg=TEXT,
-            selectcolor=CARD,
-            activebackground=PANEL,
-            activeforeground=TEXT,
             font=VALUE_FONT,
-        ).pack(side=tk.LEFT)
-
-        trow = tk.Frame(parent, bg=PANEL)
-        trow.pack(fill=tk.X, pady=1)
-        self._adj_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(side=tk.LEFT)
-        tk.Label(trow, text="Temp", bg=PANEL, fg=MUTED, width=5, font=("Segoe UI", 8)).pack(side=tk.LEFT)
-        tk.Label(
-            trow, textvariable=temp_var, bg=PANEL, fg=ACCENT, width=3,
-            font=VALUE_FONT,
-        ).pack(side=tk.LEFT, expand=True)
-        tk.Label(trow, text="°C", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side=tk.LEFT)
-        self._adj_btn(trow, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(side=tk.LEFT)
-
-        mrow = tk.Frame(parent, bg=PANEL)
-        mrow.pack(fill=tk.X, pady=1)
-        self._adj_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(side=tk.LEFT)
-        tk.Label(mrow, text="Time", bg=PANEL, fg=MUTED, width=5, font=("Segoe UI", 8)).pack(side=tk.LEFT)
-        tk.Label(
-            mrow, textvariable=time_var, bg=PANEL, fg=ACCENT2, width=3,
-            font=VALUE_FONT,
-        ).pack(side=tk.LEFT, expand=True)
-        tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side=tk.LEFT)
-        self._adj_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(side=tk.LEFT)
-
-    def _round_time_row(self, parent, index, var, enabled_var):
-        row = tk.Frame(parent, bg=PANEL)
-        row.pack(fill=tk.X, pady=1)
-        tk.Checkbutton(
-            row,
-            text=f"R{index}",
-            variable=enabled_var,
-            bg=PANEL,
-            fg=TEXT,
-            selectcolor=CARD,
-            activebackground=PANEL,
-            activeforeground=TEXT,
-            font=VALUE_FONT,
-            width=3,
+            width=8,
             anchor="w",
         ).pack(side=tk.LEFT)
-        self._adj_btn(row, "−", lambda v=var: self._bump_picture_time(v, -1)).pack(side=tk.LEFT)
-        tk.Label(row, textvariable=var, bg=PANEL, fg=ACCENT2, font=VALUE_FONT).pack(
-            side=tk.LEFT, expand=True
+        tk.Checkbutton(
+            head,
+            text="On",
+            variable=enabled_var,
+            bg=PANEL,
+            fg=MUTED,
+            selectcolor=CARD,
+            activebackground=PANEL,
+            activeforeground=TEXT,
+            font=SMALL_FONT,
+            command=self._refresh_round_highlight,
+        ).pack(side=tk.RIGHT)
+
+        ctrl = tk.Frame(block, bg=PANEL)
+        ctrl.pack(fill=tk.X, pady=(4, 0))
+        self._adj_btn(ctrl, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(side=tk.LEFT)
+        tk.Label(ctrl, textvariable=temp_var, bg=PANEL, fg=ACCENT, font=VALUE_FONT, width=3).pack(
+            side=tk.LEFT, padx=2
         )
-        tk.Label(row, text="min", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side=tk.LEFT)
-        self._adj_btn(row, "+", lambda v=var: self._bump_picture_time(v, 1)).pack(side=tk.LEFT)
+        tk.Label(ctrl, text="°C", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
+        self._adj_btn(ctrl, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(side=tk.LEFT, padx=(0, 8))
+        self._adj_btn(ctrl, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(side=tk.LEFT)
+        tk.Label(ctrl, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=VALUE_FONT, width=3).pack(
+            side=tk.LEFT, padx=2
+        )
+        tk.Label(ctrl, text="min", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
+        self._adj_btn(ctrl, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(side=tk.LEFT)
+
+    def _set_frame_bg(self, widget, bg):
+        try:
+            widget.configure(bg=bg)
+        except tk.TclError:
+            pass
+        for child in widget.winfo_children():
+            self._set_frame_bg(child, bg)
+
+    def _refresh_round_highlight(self):
+        active = self._active_round
+        for i, frame in enumerate(self._round_row_frames, start=1):
+            if i == active and self._busy:
+                bg = ROUND_ACTIVE
+            elif self._round_enabled[i - 1].get():
+                bg = CARD
+            else:
+                bg = PANEL
+            frame.configure(bg=bg)
+            self._set_frame_bg(frame, bg)
+
+    def _highlight_round(self, round_index):
+        self._active_round = round_index
+        self._status_display.set(f"Round {round_index} — Incubating")
+        self._refresh_round_highlight()
+
+    def _clear_round_highlight(self):
+        self._active_round = 0
+        self._refresh_round_highlight()
 
     def _petri_stepper_row(self, parent):
         """Petri dish count for Take Pictures (default 10)."""
@@ -596,16 +508,6 @@ class ProcedureGUI:
         v = max(INCUBATION_MIN_MIN, float(var.get()) + direction * INCUBATION_MIN_STEP)
         var.set(round(min(INCUBATION_MIN_MAX, v), 1))
 
-    def _bump_picture_time(self, var, direction):
-        presets = list(PICTURE_TIME_PRESETS)
-        cur = int(var.get())
-        try:
-            idx = presets.index(cur)
-        except ValueError:
-            idx = min(range(len(presets)), key=lambda i: abs(presets[i] - cur))
-        idx = max(0, min(len(presets) - 1, idx + direction))
-        var.set(presets[idx])
-
     def _on_canvas_resize(self, event):
         self._gauge_cx = max(80, event.width // 2)
         self._gauge_cy = max(60, event.height // 2)
@@ -640,23 +542,13 @@ class ProcedureGUI:
         return [bool(v.get()) for v in vars_list]
 
     def _validate_study_settings(self):
-        if not any(self._enabled_flags(self._picture_enabled)):
-            raise ValueError("Enable at least one picture round")
-        if not any(self._enabled_flags(self._incub_enabled)):
-            pass  # incubation phase optional for combined study
-        if self._picture_enabled[0].get() and self._picture_enabled[2].get():
-            t1 = int(self._picture_times[0].get())
-            t3 = int(self._picture_times[2].get())
-            if t3 < t1 + MIN_ROUND3_ABOVE_ROUND1_MIN:
-                raise ValueError(
-                    f"Round 3 ({t3} min) must be at least {t1 + MIN_ROUND3_ABOVE_ROUND1_MIN} min "
-                    f"(Round 1 + {MIN_ROUND3_ABOVE_ROUND1_MIN} min)"
-                )
+        if not any(self._enabled_flags(self._round_enabled)):
+            raise ValueError("Enable at least one round (On)")
 
     def _run_action(self, title, fn):
         if self._busy:
             return
-        if title == "Start Incubation + Imaging":
+        if title == STUDY_BTN_TITLE:
             try:
                 self._validate_study_settings()
             except ValueError as exc:
@@ -672,7 +564,7 @@ class ProcedureGUI:
                 elif title == "Take Pictures":
                     self._do_pictures()
                     self._log_msg(f"Done: {title}")
-                elif title == "Start Incubation + Imaging":
+                elif title == STUDY_BTN_TITLE:
                     self._do_incubation_imaging()
                     self._log_msg(f"Done: {title}")
                 elif fn is not None:
@@ -685,13 +577,15 @@ class ProcedureGUI:
                 self._run_on_ui(lambda e=str(exc): messagebox.showerror("Error", e))
             finally:
                 self._set_busy(False, "Idle")
-                self._run_on_ui(lambda: self._set_center_readout(idle=True))
+                self._run_on_ui(lambda: (self._clear_round_highlight(), self._set_center_readout(idle=True)))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _set_busy(self, busy, status):
         self._busy = busy
-        self._run_on_ui(lambda s=status: self._status_display.set(s))
+        self._run_on_ui(
+            lambda s=status: (self._status_display.set(s), self._refresh_round_highlight())
+        )
 
     def _format_remaining(self, remaining_s):
         mins, secs = divmod(int(max(0, remaining_s)), 60)
@@ -753,28 +647,27 @@ class ProcedureGUI:
 
     def _do_incubation_imaging(self):
         self._validate_study_settings()
-        n = int(self._petri_count.get())
-        temps = [float(self._incub_temps[i].get()) for i in range(3)]
-        times = [float(self._incub_times[i].get()) for i in range(3)]
-        pics = [int(self._picture_times[i].get()) for i in range(5)]
-        inc_on = self._enabled_flags(self._incub_enabled)
-        rnd_on = self._enabled_flags(self._picture_enabled)
-        self._log_msg(f"Incubation + imaging: petri={n}")
-        self._log_msg(f"  Slots on: {inc_on} temps={temps} times={times}")
-        self._log_msg(f"  Rounds on: {rnd_on} mins={pics}")
+        n = max(1, min(MAX_PETRI_DISHES, int(self._petri_count.get())))
+        temps = [float(self._round_temps[i].get()) for i in range(NUM_STUDY_ROUNDS)]
+        times = [float(self._round_times[i].get()) for i in range(NUM_STUDY_ROUNDS)]
+        rnd_on = self._enabled_flags(self._round_enabled)
+        self._log_msg(f"{STUDY_BTN_TITLE}: {n} petri dish(es)")
+        self._log_msg(f"  Rounds on: {rnd_on}")
 
         def on_log(msg):
             self._log_msg(msg)
 
+        def on_round_start(rnd):
+            self._run_on_ui(lambda r=rnd: self._highlight_round(r))
+
         exp = run_incubation_imaging_study(
             num_petri_dishes=n,
-            incubation_temps=temps,
-            incubation_times=times,
-            picture_times_min=pics,
-            incubation_enabled=inc_on,
-            picture_rounds_enabled=rnd_on,
+            round_temps=temps,
+            round_times_min=times,
+            rounds_enabled=rnd_on,
             on_tick=self._incubation_tick,
             on_log=on_log,
+            on_round_start=on_round_start,
         )
         self._log_msg(f"Experiment: {exp}")
 
@@ -783,9 +676,15 @@ class ProcedureGUI:
         temp = self._temp_display.get()
         target = self._target_display.get()
         remaining = self._time_display.get()
-        c.create_text(cx, cy - 42, text=temp, fill=TEXT, font=("Segoe UI", 34, "bold"))
-        c.create_text(cx, cy, text=target, fill=MUTED, font=("Segoe UI", 12))
-        c.create_text(cx, cy + 36, text=remaining, fill=ACCENT2, font=("Segoe UI", 22, "bold"))
+        round_hint = ""
+        if self._active_round and self._busy:
+            round_hint = f"Round {self._active_round}"
+        y0 = cy - 52 if round_hint else cy - 42
+        if round_hint:
+            c.create_text(cx, cy - 58, text=round_hint, fill=ACCENT3, font=("Segoe UI", 13, "bold"))
+        c.create_text(cx, y0 + 10, text=temp, fill=TEXT, font=("Segoe UI", 34, "bold"))
+        c.create_text(cx, cy + 4, text=target, fill=MUTED, font=("Segoe UI", 12))
+        c.create_text(cx, cy + 40, text=remaining, fill=ACCENT2, font=("Segoe UI", 22, "bold"))
 
     def _draw_idle_gauge(self):
         if not self._canvas:

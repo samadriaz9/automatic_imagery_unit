@@ -9,18 +9,16 @@ from device_config import (
     CAMERA_DISH_PRE_UP,
     CAMERA_DISH_PRE_UP_ROW2,
     CAMERA_STEPSIZE,
-    DEFAULT_INCUBATION_SLOT_ENABLED,
-    DEFAULT_INCUBATION_SLOT_TEMPS,
-    DEFAULT_INCUBATION_SLOT_TIMES,
-    STEP_INCUBATION_MINUTES,
-    STEP_INCUBATION_TEMP_C,
-    DEFAULT_PICTURE_ROUND_ENABLED,
+    DEFAULT_ROUND_ENABLED,
+    DEFAULT_ROUND_TEMPS,
+    DEFAULT_ROUND_TIMES_MIN,
     IMAGING_COLS,
     IMAGING_ROWS,
     MAX_PETRI_DISHES,
-    MIN_ROUND3_ABOVE_ROUND1_MIN,
     NUM_INCUBATION_SLOTS,
-    NUM_PICTURE_SLOTS,
+    NUM_STUDY_ROUNDS,
+    STEP_INCUBATION_MINUTES,
+    STEP_INCUBATION_TEMP_C,
     PETRI_DISH_PRE_UP,
     PETRI_DISH_PRE_UP_ROW2,
     PETRI_STEPSIZE,
@@ -154,7 +152,7 @@ def run_timed_picture_study(
     Returns parent experiment directory.
     """
     if target_c is None:
-        target_c = DEFAULT_INCUBATION_SLOT_TEMPS[0]
+        target_c = DEFAULT_ROUND_TEMPS[0]
 
     num_rounds = max(1, min(6, int(num_rounds)))
     intervals = list(interval_minutes)[:6]
@@ -191,84 +189,63 @@ def run_timed_picture_study(
 
 def run_incubation_imaging_study(
     num_petri_dishes,
-    incubation_temps,
-    incubation_times,
-    picture_times_min,
-    incubation_enabled=None,
-    picture_rounds_enabled=None,
+    round_temps,
+    round_times_min,
+    rounds_enabled=None,
     on_tick=None,
     on_log=None,
+    on_round_start=None,
 ):
     """
-    Full automated study: enabled incubation slots, then enabled picture rounds.
+    For each enabled round: incubate at round temp/time, then capture petri dishes.
 
-    Each picture round incubates at the matching slot temperature (rounds 4–5 use
-    slot 3 temperature) for ``picture_times_min[round]`` minutes, then captures.
-
-    Cumulative folder names: ``03min``, ``06min``, … (enabled rounds only).
-
-    Raises ValueError if enabled round 3 time is not at least 5 minutes after round 1.
+    Images are saved under ``data/exp_XX/{MM}min/`` using that round's time (minutes).
+    Duplicate folder names get a ``_rN`` suffix.
     """
-    temps = [float(t) for t in incubation_temps[:3]]
-    slot_times = [float(t) for t in incubation_times[:3]]
-    pic_times = [float(t) for t in picture_times_min[:5]]
-    inc_on = list(incubation_enabled or DEFAULT_INCUBATION_SLOT_ENABLED)
-    rnd_on = list(picture_rounds_enabled or DEFAULT_PICTURE_ROUND_ENABLED)
-    while len(temps) < 3:
-        temps.append(temps[-1] if temps else 37.0)
-    while len(slot_times) < 3:
-        slot_times.append(slot_times[-1] if slot_times else 1.0)
-    while len(pic_times) < 5:
-        pic_times.append(pic_times[-1] if pic_times else 3.0)
-    while len(inc_on) < 3:
-        inc_on.append(False)
-    while len(rnd_on) < 5:
-        rnd_on.append(False)
+    temps = [float(t) for t in round_temps[:NUM_STUDY_ROUNDS]]
+    times = [float(t) for t in round_times_min[:NUM_STUDY_ROUNDS]]
+    enabled = list(rounds_enabled or DEFAULT_ROUND_ENABLED)
+    while len(temps) < NUM_STUDY_ROUNDS:
+        temps.append(37.0)
+    while len(times) < NUM_STUDY_ROUNDS:
+        times.append(4.0)
+    while len(enabled) < NUM_STUDY_ROUNDS:
+        enabled.append(False)
 
-    if not any(rnd_on[:NUM_PICTURE_SLOTS]):
-        raise ValueError("Enable at least one picture round")
-
-    if rnd_on[0] and rnd_on[2]:
-        min_r3 = pic_times[0] + MIN_ROUND3_ABOVE_ROUND1_MIN
-        if pic_times[2] < min_r3:
-            raise ValueError(
-                f"Round 3 time ({pic_times[2]:g} min) must be at least "
-                f"{min_r3:g} min (Round 1 + {MIN_ROUND3_ABOVE_ROUND1_MIN:g} min)"
-            )
+    if not any(enabled[:NUM_STUDY_ROUNDS]):
+        raise ValueError("Enable at least one round")
 
     exp_dir = _next_exp_dir(data_root())
-    cumulative = 0.0
 
     def _log(msg):
         print(msg)
         if on_log:
             on_log(msg)
 
-    if any(inc_on[:3]):
-        _log("Phase 1: incubation slots")
-        for i in range(3):
-            if not inc_on[i]:
-                continue
-            _log(f"  Slot {i + 1}: {temps[i]:g}°C for {slot_times[i]:g} min")
-            Start_incubation(temps[i], slot_times[i], on_tick=on_tick)
-    else:
-        _log("Phase 1: skipped (no incubation slots enabled)")
+    active = [i + 1 for i in range(NUM_STUDY_ROUNDS) if enabled[i]]
+    _log(f"Incubation + imaging: {len(active)} round(s), petri={num_petri_dishes}")
 
-    _log("Phase 2: imagery rounds")
-    active_rounds = [i + 1 for i in range(5) if rnd_on[i]]
-    for rnd in active_rounds:
-        temp = temps[min(rnd - 1, 2)]
-        mins = pic_times[rnd - 1]
-        cumulative += mins
-        label = f"{int(round(cumulative)):02d}min"
-        _log(f"  Round {rnd}/5: {temp:g}°C, {mins:g} min → capture → {label}/")
+    for rnd in active:
+        temp = temps[rnd - 1]
+        mins = times[rnd - 1]
+        label = f"{int(round(mins)):02d}min"
+        subdir = label
+        if os.path.exists(os.path.join(exp_dir, subdir)):
+            subdir = f"{label}_r{rnd}"
+
+        _log(f"  Round {rnd}: {temp:g}°C, {mins:g} min → capture → {subdir}/")
+        if on_round_start:
+            try:
+                on_round_start(rnd)
+            except Exception:
+                pass
 
         Start_incubation(temp, mins, on_tick=on_tick)
         step_05_prepare_imaging()
         capture_petri_dishes(
             num_petri_dishes,
             experiment_dir=exp_dir,
-            time_point_subdir=label,
+            time_point_subdir=subdir,
         )
 
     step_05_post_imaging_cleanup()

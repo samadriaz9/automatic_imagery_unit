@@ -18,20 +18,16 @@ MAX_PETRI_DISHES = PETRI_TRAY_ROWS * PETRI_TRAY_COLS
 STEP_INCUBATION_TEMP_C = 37.0
 STEP_INCUBATION_MINUTES = 2.0
 
-# Incubation GUI — 3 slots (temp + duration each)
-NUM_INCUBATION_SLOTS = 3
+# Incubation + imaging study — up to 6 rounds (temp + time each)
+NUM_STUDY_ROUNDS = 6
 INCUBATION_TEMP_OPTIONS = (30, 37, 44)
-DEFAULT_INCUBATION_SLOT_TEMPS = (37, 37, 37)
-DEFAULT_INCUBATION_SLOT_TIMES = (1.0, 1.0, 1.0)
-# Which slots / rounds run by default (only first enabled)
-DEFAULT_INCUBATION_SLOT_ENABLED = (True, False, False)
-DEFAULT_PICTURE_ROUND_ENABLED = (True, False, False, False, False)
+DEFAULT_ROUND_TEMPS = (37.0, 37.0, 37.0, 37.0, 37.0, 37.0)
+DEFAULT_ROUND_TIMES_MIN = (4.0, 4.0, 4.0, 4.0, 4.0, 4.0)
+DEFAULT_ROUND_ENABLED = (True, False, False, False, False, False)
 INCUBATION_MIN_STEP = 0.5
 INCUBATION_MIN_MIN = 0.5
 INCUBATION_MIN_MAX = 600.0
 
-# Imagery — 5 rounds; round 3 must be >= round 1 + MIN_ROUND3_ABOVE_ROUND1
-NUM_PICTURE_SLOTS = 5
-PICTURE_TIME_PRESETS = (1, 3, 5, 10, 15, 30)
-DEFAULT_PICTURE_TIMES = (3, 3, 8, 3, 3)
-MIN_ROUND3_ABOVE_ROUND1_MIN = 5
+# Legacy aliases (workflow / imports)
+NUM_INCUBATION_SLOTS = 3
+NUM_PICTURE_SLOTS = NUM_STUDY_ROUNDS
