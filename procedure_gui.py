@@ -1023,12 +1023,7 @@ class ProcedureGUI:
         temp = self._temp_display.get()
         target = self._target_display.get()
         remaining = self._time_display.get()
-        round_hint = ""
-        if self._active_round and self._busy:
-            round_hint = f"Round {self._active_round}"
-        y0 = cy - 52 if round_hint else cy - 42
-        if round_hint:
-            c.create_text(cx, cy - 58, text=round_hint, fill=ROUND_ACTIVE, font=("Segoe UI", 13, "bold"))
+        y0 = cy - 42
         c.create_text(cx, y0 + 10, text=temp, fill=TEXT, font=("Segoe UI", 34, "bold"))
         c.create_text(cx, cy + 4, text=target, fill=MUTED, font=("Segoe UI", 12))
         c.create_text(cx, cy + 40, text=remaining, fill=ACCENT2, font=("Segoe UI", 22, "bold"))
