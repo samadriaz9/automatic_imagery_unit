@@ -523,11 +523,17 @@ class ProcedureGUI:
         ctrl_box = tk.Frame(block, bg=PANEL)
         ctrl_box.pack(fill=tk.X, pady=(2, 0))
 
-        trow = tk.Frame(ctrl_box, bg=PANEL)
-        trow.pack(anchor="center", pady=(0, 3))
         gap = int(round(8 * ROUND_SCALE))
+        hours_var = self._round_time_hours[index]
+        time_display = self._round_time_displays[index]
+
+        round_row = tk.Frame(ctrl_box, bg=PANEL)
+        round_row.pack(anchor="center")
+
+        checks_col = tk.Frame(round_row, bg=PANEL)
+        checks_col.pack(side=tk.LEFT, padx=(0, gap))
         tk.Checkbutton(
-            trow,
+            checks_col,
             text="",
             variable=enabled_var,
             bg=PANEL,
@@ -537,7 +543,25 @@ class ProcedureGUI:
             activeforeground=TEXT,
             font=ROUND_ON_INDICATOR,
             command=self._refresh_round_highlight,
-        ).pack(side=tk.LEFT, padx=(0, gap), pady=2)
+        ).pack(anchor="w", pady=(2, 0))
+        tk.Checkbutton(
+            checks_col,
+            text="",
+            variable=hours_var,
+            bg=PANEL,
+            fg=TEXT,
+            selectcolor=ROUND_ACTIVE,
+            activebackground=PANEL,
+            activeforeground=TEXT,
+            font=ROUND_ON_INDICATOR,
+            command=lambda idx=index: self._toggle_time_unit(idx),
+        ).pack(anchor="w", pady=(2, 0))
+
+        controls_col = tk.Frame(round_row, bg=PANEL)
+        controls_col.pack(side=tk.LEFT)
+
+        trow = tk.Frame(controls_col, bg=PANEL)
+        trow.pack(anchor="w", pady=(0, 3))
         self._round_temp_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(
             side=tk.LEFT, padx=(0, gap)
         )
@@ -549,10 +573,8 @@ class ProcedureGUI:
             side=tk.LEFT, padx=(gap, 0)
         )
 
-        mrow = tk.Frame(ctrl_box, bg=PANEL)
-        mrow.pack(anchor="center")
-        time_display = self._round_time_displays[index]
-        hours_var = self._round_time_hours[index]
+        mrow = tk.Frame(controls_col, bg=PANEL)
+        mrow.pack(anchor="w")
         self._round_time_btn(
             mrow, "−t", lambda idx=index: self._bump_incub_time(idx, -1)
         ).pack(side=tk.LEFT, padx=(0, gap))
@@ -569,18 +591,6 @@ class ProcedureGUI:
         self._round_time_unit_labels.append(unit_lbl)
         self._round_time_btn(
             mrow, "t+", lambda idx=index: self._bump_incub_time(idx, 1)
-        ).pack(side=tk.LEFT, padx=(gap, 0))
-        tk.Checkbutton(
-            mrow,
-            text="hrs",
-            variable=hours_var,
-            bg=PANEL,
-            fg=TEXT,
-            selectcolor=ROUND_ACTIVE,
-            activebackground=PANEL,
-            activeforeground=TEXT,
-            font=ROUND_ON_INDICATOR,
-            command=lambda idx=index: self._toggle_time_unit(idx),
         ).pack(side=tk.LEFT, padx=(gap, 0))
         self._sync_round_time_display(index)
         _redraw_round_shell(PANEL)
