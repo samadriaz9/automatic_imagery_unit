@@ -473,6 +473,16 @@ atexit.register(shutdown_all)
 
 
 def run_workflow():
+
+    x = input ('Enter to start pictures: ')
+    incubator_lid_home()
+    petri_dishes_home()
+    petri_dishes_up(200)
+    Camera_home()
+    Camera_up(3730)
+
+
+
     
     x = input ('Enter to start all modules home: ')
     print("Step 01: All modules home")
