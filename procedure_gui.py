@@ -90,6 +90,7 @@ ROUND_UNIT_FONT = ("Segoe UI", int(round(16 * ROUND_SCALE)))
 ROUND_BLOCK_PAD = 6
 ROUND_BLOCK_RADIUS = 10
 ROUND_ROW_GAP = 5
+ROUND_CONTROLS_SHIFT = 14
 ROUND_ON_INDICATOR = ("Segoe UI", 13)
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
@@ -558,7 +559,9 @@ class ProcedureGUI:
         ).pack(anchor="w", pady=(2, 0))
 
         controls_col = tk.Frame(round_row, bg=PANEL)
-        controls_col.pack(side=tk.LEFT, anchor="center")
+        controls_col.pack(
+            side=tk.LEFT, anchor="center", padx=(ROUND_CONTROLS_SHIFT, 0)
+        )
 
         trow = tk.Frame(controls_col, bg=PANEL)
         trow.pack(anchor="center", pady=(0, 3))
