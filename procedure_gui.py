@@ -469,10 +469,8 @@ class ProcedureGUI:
             activebackground=PANEL,
             activeforeground=TEXT,
             font=ROUND_ON_INDICATOR,
-            padx=(0, gap),
-            pady=2,
             command=self._refresh_round_highlight,
-        ).pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT, padx=(0, gap), pady=2)
         self._round_temp_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(
             side=tk.LEFT, padx=(0, gap)
         )
