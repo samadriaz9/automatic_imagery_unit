@@ -61,6 +61,7 @@ MUTED = "#9aa5b8"
 WARN = "#e8a87c"
 CLOSE_BTN = "#b85450"
 BTN_FONT = ("Segoe UI", 11, "bold")
+LEFT_BTN_FONT = ("Segoe UI", int(round(11 * 1.5)), "bold")
 ADJ_FONT = ("Segoe UI", 10, "bold")
 PRESET_FONT = ("Segoe UI", 8)
 SMALL_FONT = ("Segoe UI", 8)
@@ -196,6 +197,7 @@ class ProcedureGUI:
             fg=TEXT,
             hover="#d46a66",
             height=LEFT_BTN_HEIGHT,
+            font=LEFT_BTN_FONT,
             stretch=True,
         ).pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
@@ -445,19 +447,38 @@ class ProcedureGUI:
         redraw()
         return wrap
 
-    def _mk_btn(self, parent, text, command, color=ACCENT, width=20, height=LEFT_BTN_HEIGHT, stretch=True):
+    def _mk_btn(
+        self,
+        parent,
+        text,
+        command,
+        color=ACCENT,
+        width=20,
+        height=LEFT_BTN_HEIGHT,
+        stretch=True,
+        font=BTN_FONT,
+    ):
         return self._mk_round_btn(
             parent,
             text,
             lambda t=text, f=command: self._run_action(t, f),
             color=color,
             height=height,
+            font=font,
             stretch=stretch,
         )
 
     def _mk_left_btn(self, parent, text, command, color=ACCENT):
         """Left column action button (taller and wider than default)."""
-        return self._mk_btn(parent, text, command, color=color, height=LEFT_BTN_HEIGHT, stretch=True)
+        return self._mk_btn(
+            parent,
+            text,
+            command,
+            color=color,
+            height=LEFT_BTN_HEIGHT,
+            stretch=True,
+            font=LEFT_BTN_FONT,
+        )
 
     def _incub_slot_row(self, parent, index, temp_var, time_var, enabled_var):
         head = tk.Frame(parent, bg=PANEL)
