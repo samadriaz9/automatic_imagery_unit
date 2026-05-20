@@ -73,18 +73,18 @@ LEFT_BTN_WIDTH_SCALE = 1.4
 LEFT_PANEL_MIN_WIDTH = int(round(180 * LEFT_BTN_WIDTH_SCALE))
 CENTER_PANEL_WIDTH = 400
 RIGHT_PANEL_MIN_WIDTH = 380
-STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))
+STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.1))
 STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
 STUDY_BTN_FONT = ("Segoe UI", 14, "bold")
 STUDY_BTN_RADIUS = 12
-ROUND_SCALE = 0.64
+ROUND_SCALE = 0.52
 ROUND_ADJ_BTN_HEIGHT = int(round(80 * ROUND_SCALE))
 ROUND_ADJ_BTN_WIDTH = int(round(104 * ROUND_SCALE))
 ROUND_ADJ_BTN_FONT = ("Segoe UI", int(round(22 * ROUND_SCALE)), "bold")
 ROUND_ADJ_BTN_RADIUS = int(round(16 * ROUND_SCALE))
 ROUND_VALUE_FONT = ("Segoe UI", int(round(20 * ROUND_SCALE)), "bold")
 ROUND_UNIT_FONT = ("Segoe UI", int(round(16 * ROUND_SCALE)))
-ROUND_ON_INDICATOR = ("Segoe UI", 16)
+ROUND_ON_INDICATOR = ("Segoe UI", 13)
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
 ROUND_TIME_BTN_COLOR = "#d35400"
@@ -261,7 +261,7 @@ class ProcedureGUI:
             radius=STUDY_BTN_RADIUS,
             stretch=True,
             min_width=STUDY_BTN_MIN_WIDTH,
-        ).pack(fill=tk.X, pady=(0, 12))
+        ).pack(fill=tk.X, pady=(0, 6))
 
         rounds_box = tk.Frame(right_outer, bg=PANEL)
         rounds_box.pack(fill=tk.BOTH, expand=True)
@@ -449,15 +449,15 @@ class ProcedureGUI:
         )
 
     def _study_round_row(self, parent, _index, temp_var, time_var, enabled_var):
-        block = tk.Frame(parent, bg=PANEL, padx=4, pady=4)
-        block.pack(fill=tk.X, pady=2)
+        block = tk.Frame(parent, bg=PANEL, padx=2, pady=1)
+        block.pack(fill=tk.X, pady=1)
         self._round_row_frames.append(block)
 
         ctrl_box = tk.Frame(block, bg=PANEL)
-        ctrl_box.pack(fill=tk.X, pady=(4, 0))
+        ctrl_box.pack(fill=tk.X, pady=(2, 0))
 
         trow = tk.Frame(ctrl_box, bg=PANEL)
-        trow.pack(anchor="center", pady=(0, 8))
+        trow.pack(anchor="center", pady=(0, 3))
         gap = int(round(8 * ROUND_SCALE))
         tk.Checkbutton(
             trow,
