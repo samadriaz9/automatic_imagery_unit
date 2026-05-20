@@ -168,6 +168,12 @@ class ProcedureGUI:
             ("Insert Petri Dishes", step_02_insert_petri_dishes),
             ("Shift for Incubation", step_03_shift_for_incubation),
             ("Start Incubation", None),
+        ]:
+            self._mk_btn(left_steps, label, fn).pack(fill=tk.X, pady=3)
+
+        self._petri_stepper_row(left_steps)
+
+        for label, fn in [
             ("Take Pictures", None),
             ("Sterilize", step_06_sterilize),
         ]:
@@ -263,14 +269,6 @@ class ProcedureGUI:
             "Use rounds:",
             [(1, "1"), (2, "2"), (3, "3"), (4, "4"), (5, "5"), (5, "All")],
             self._set_round_count,
-        )
-        self._stepper_row(
-            img,
-            "Petri dishes",
-            self._petri_count,
-            lambda: self._petri_count.set(max(1, int(self._petri_count.get()) - 1)),
-            lambda: self._petri_count.set(min(MAX_PETRI_DISHES, int(self._petri_count.get()) + 1)),
-            fmt="d",
         )
         tk.Label(
             img,
@@ -412,15 +410,40 @@ class ProcedureGUI:
         tk.Label(row, text="min", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side=tk.LEFT)
         self._adj_btn(row, "+", lambda v=var: self._bump_picture_time(v, 1)).pack(side=tk.LEFT)
 
-    def _stepper_row(self, parent, label, var, on_dec, on_inc, fmt="d"):
-        tk.Label(parent, text=label, bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(anchor="w", pady=(2, 0))
+    def _petri_stepper_row(self, parent):
+        """Petri dish count for Take Pictures (default 10)."""
+        tk.Label(
+            parent,
+            text="Petri dishes",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(6, 2))
         row = tk.Frame(parent, bg=PANEL)
-        row.pack(fill=tk.X, pady=1)
-        self._adj_btn(row, "−", on_dec).pack(side=tk.LEFT)
-        tk.Label(row, textvariable=var, bg=PANEL, fg=TEXT, font=VALUE_FONT).pack(
-            side=tk.LEFT, expand=True
+        row.pack(fill=tk.X, pady=(0, 4))
+        self._adj_btn(
+            row,
+            "−",
+            lambda: self._petri_count.set(max(1, int(self._petri_count.get()) - 1)),
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            row,
+            textvariable=self._petri_count,
+            bg=PANEL,
+            fg=TEXT,
+            font=("Segoe UI", 14, "bold"),
+            width=4,
+        ).pack(side=tk.LEFT, expand=True)
+        tk.Label(row, text=f"/ {MAX_PETRI_DISHES}", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(
+            side=tk.LEFT
         )
-        self._adj_btn(row, "+", on_inc).pack(side=tk.LEFT)
+        self._adj_btn(
+            row,
+            "+",
+            lambda: self._petri_count.set(
+                min(MAX_PETRI_DISHES, int(self._petri_count.get()) + 1)
+            ),
+        ).pack(side=tk.LEFT)
 
     def _bump_temp(self, var, direction):
         presets = list(INCUBATION_TEMP_OPTIONS)
@@ -601,7 +624,8 @@ class ProcedureGUI:
         Start_incubation(target, minutes, on_tick=self._incubation_tick)
 
     def _do_pictures(self):
-        n = int(self._petri_count.get())
+        n = max(1, min(MAX_PETRI_DISHES, int(self._petri_count.get())))
+        self._log_msg(f"Take Pictures: {n} petri dish(es)")
         step_05_prepare_imaging()
         exp = capture_petri_dishes(n)
         step_05_post_imaging_cleanup()
