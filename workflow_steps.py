@@ -178,3 +178,71 @@ def run_timed_picture_study(
     step_05_post_imaging_cleanup()
     _log(f"Timed study complete: {exp_dir}")
     return exp_dir
+
+
+def run_incubation_imaging_study(
+    num_petri_dishes,
+    incubation_temps,
+    incubation_times,
+    picture_times_min,
+    on_tick=None,
+    on_log=None,
+):
+    """
+    Full automated study: three configured incubations, then five picture rounds.
+
+    Each picture round incubates at the matching slot temperature (slots 4–5 use
+    slot 3 temperature) for ``picture_times_min[round]`` minutes, then captures.
+
+    Cumulative folder names: ``03min``, ``06min``, …
+
+    Raises ValueError if round 3 time is not at least 5 minutes after round 1.
+    """
+    temps = [float(t) for t in incubation_temps[:3]]
+    slot_times = [float(t) for t in incubation_times[:3]]
+    pic_times = [float(t) for t in picture_times_min[:5]]
+    while len(temps) < 3:
+        temps.append(temps[-1] if temps else 37.0)
+    while len(slot_times) < 3:
+        slot_times.append(slot_times[-1] if slot_times else 1.0)
+    while len(pic_times) < 5:
+        pic_times.append(pic_times[-1] if pic_times else 3.0)
+
+    if pic_times[2] < pic_times[0] + 5:
+        raise ValueError(
+            f"Round 3 time ({pic_times[2]:g} min) must be at least "
+            f"{pic_times[0] + 5:g} min (Round 1 + 5 min)"
+        )
+
+    exp_dir = _next_exp_dir(data_root())
+    cumulative = 0.0
+
+    def _log(msg):
+        print(msg)
+        if on_log:
+            on_log(msg)
+
+    _log("Phase 1: three incubation slots")
+    for i in range(3):
+        _log(f"  Slot {i + 1}: {temps[i]:g}°C for {slot_times[i]:g} min")
+        Start_incubation(temps[i], slot_times[i], on_tick=on_tick)
+
+    _log("Phase 2: imagery rounds")
+    for rnd in range(1, 6):
+        temp = temps[min(rnd - 1, 2)]
+        mins = pic_times[rnd - 1]
+        cumulative += mins
+        label = f"{int(round(cumulative)):02d}min"
+        _log(f"  Round {rnd}/5: {temp:g}°C, {mins:g} min → capture → {label}/")
+
+        Start_incubation(temp, mins, on_tick=on_tick)
+        step_05_prepare_imaging()
+        capture_petri_dishes(
+            num_petri_dishes,
+            experiment_dir=exp_dir,
+            time_point_subdir=label,
+        )
+
+    step_05_post_imaging_cleanup()
+    _log(f"Incubation + imaging complete: {exp_dir}")
+    return exp_dir
