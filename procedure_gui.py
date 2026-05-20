@@ -16,10 +16,13 @@ from device_config import (
     DEFAULT_ROUND_ENABLED,
     DEFAULT_ROUND_TEMPS,
     DEFAULT_ROUND_TIMES_MIN,
+    INCUBATION_HOUR_STEP,
     INCUBATION_MIN_MAX,
     INCUBATION_MIN_MIN,
     INCUBATION_MIN_STEP,
-    INCUBATION_TEMP_OPTIONS,
+    INCUBATION_TEMP_MAX,
+    INCUBATION_TEMP_MIN,
+    INCUBATION_TEMP_STEP,
     MAX_PETRI_DISHES,
     NUM_STUDY_ROUNDS,
     STEP_INCUBATION_MINUTES,
@@ -124,6 +127,14 @@ class ProcedureGUI:
         self._round_enabled = [
             tk.BooleanVar(value=DEFAULT_ROUND_ENABLED[i]) for i in range(NUM_STUDY_ROUNDS)
         ]
+        self._round_time_hours = [
+            tk.BooleanVar(value=False) for _ in range(NUM_STUDY_ROUNDS)
+        ]
+        self._round_time_displays = [
+            tk.StringVar(value=str(DEFAULT_ROUND_TIMES_MIN[i]))
+            for i in range(NUM_STUDY_ROUNDS)
+        ]
+        self._round_time_unit_labels = []
         self._round_row_frames = []
         self._active_round = 0
 
@@ -271,7 +282,7 @@ class ProcedureGUI:
         for i in range(NUM_STUDY_ROUNDS):
             self._study_round_row(
                 rounds_box,
-                i + 1,
+                i,
                 self._round_temps[i],
                 self._round_times[i],
                 self._round_enabled[i],
@@ -454,7 +465,7 @@ class ProcedureGUI:
             font=LEFT_BTN_FONT,
         )
 
-    def _study_round_row(self, parent, _index, temp_var, time_var, enabled_var):
+    def _study_round_row(self, parent, index, temp_var, time_var, enabled_var):
         block_shell = tk.Frame(parent, bg=PANEL)
         block_shell.pack(fill=tk.X, pady=ROUND_ROW_GAP)
         self._round_row_frames.append(block_shell)
@@ -540,16 +551,38 @@ class ProcedureGUI:
 
         mrow = tk.Frame(ctrl_box, bg=PANEL)
         mrow.pack(anchor="center")
-        self._round_time_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(
-            side=tk.LEFT, padx=(0, gap)
-        )
+        time_display = self._round_time_displays[index]
+        hours_var = self._round_time_hours[index]
+        self._round_time_btn(
+            mrow, "−t", lambda idx=index: self._bump_incub_time(idx, -1)
+        ).pack(side=tk.LEFT, padx=(0, gap))
         tk.Label(
-            mrow, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=ROUND_VALUE_FONT, width=4
+            mrow,
+            textvariable=time_display,
+            bg=PANEL,
+            fg=ACCENT2,
+            font=ROUND_VALUE_FONT,
+            width=4,
         ).pack(side=tk.LEFT, padx=gap)
-        tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=ROUND_UNIT_FONT).pack(side=tk.LEFT)
-        self._round_time_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(
-            side=tk.LEFT, padx=(gap, 0)
-        )
+        unit_lbl = tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=ROUND_UNIT_FONT)
+        unit_lbl.pack(side=tk.LEFT)
+        self._round_time_unit_labels.append(unit_lbl)
+        self._round_time_btn(
+            mrow, "t+", lambda idx=index: self._bump_incub_time(idx, 1)
+        ).pack(side=tk.LEFT, padx=(gap, 0))
+        tk.Checkbutton(
+            mrow,
+            text="hrs",
+            variable=hours_var,
+            bg=PANEL,
+            fg=TEXT,
+            selectcolor=ROUND_ACTIVE,
+            activebackground=PANEL,
+            activeforeground=TEXT,
+            font=ROUND_ON_INDICATOR,
+            command=lambda idx=index: self._toggle_time_unit(idx),
+        ).pack(side=tk.LEFT, padx=(gap, 0))
+        self._sync_round_time_display(index)
         _redraw_round_shell(PANEL)
 
     def _set_frame_bg(self, widget, bg):
@@ -626,20 +659,49 @@ class ProcedureGUI:
             min_width=PETRI_STEPPER_BTN_WIDTH,
         ).pack(side=tk.LEFT, padx=(4, 0))
 
-    def _bump_temp(self, var, direction):
-        presets = list(INCUBATION_TEMP_OPTIONS)
-        cur = float(var.get())
-        try:
-            idx = presets.index(int(cur))
-        except ValueError:
-            idx = min(range(len(presets)), key=lambda i: abs(presets[i] - cur))
-        idx = max(0, min(len(presets) - 1, idx + direction))
-        var.set(presets[idx])
-        self._target_display.set(f"Target {presets[idx]} °C")
+    @staticmethod
+    def _format_time_display(minutes, in_hours):
+        if in_hours:
+            value = minutes / 60.0
+        else:
+            value = float(minutes)
+        if abs(value - round(value)) < 0.05:
+            return str(int(round(value)))
+        text = f"{value:.1f}".rstrip("0").rstrip(".")
+        return text
 
-    def _bump_incub_time(self, var, direction):
-        v = max(INCUBATION_MIN_MIN, float(var.get()) + direction * INCUBATION_MIN_STEP)
+    def _sync_round_time_display(self, index):
+        minutes = float(self._round_times[index].get())
+        in_hours = self._round_time_hours[index].get()
+        self._round_time_displays[index].set(
+            self._format_time_display(minutes, in_hours)
+        )
+        if index < len(self._round_time_unit_labels):
+            self._round_time_unit_labels[index].configure(
+                text="hr" if in_hours else "min"
+            )
+
+    def _toggle_time_unit(self, index):
+        self._sync_round_time_display(index)
+
+    def _bump_temp(self, var, direction):
+        v = float(var.get()) + direction * INCUBATION_TEMP_STEP
+        v = max(INCUBATION_TEMP_MIN, min(INCUBATION_TEMP_MAX, v))
+        if abs(v - round(v)) < 0.05:
+            var.set(int(round(v)))
+        else:
+            var.set(round(v, 1))
+        self._target_display.set(f"Target {var.get()} °C")
+
+    def _bump_incub_time(self, index, direction):
+        if self._round_time_hours[index].get():
+            step = INCUBATION_HOUR_STEP * 60.0
+        else:
+            step = INCUBATION_MIN_STEP
+        var = self._round_times[index]
+        v = max(INCUBATION_MIN_MIN, float(var.get()) + direction * step)
         var.set(round(min(INCUBATION_MIN_MAX, v), 1))
+        self._sync_round_time_display(index)
 
     def _on_canvas_resize(self, event):
         self._gauge_cx = max(80, event.width // 2)
