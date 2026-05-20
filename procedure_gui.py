@@ -77,14 +77,14 @@ STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))
 STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
 STUDY_BTN_FONT = ("Segoe UI", 14, "bold")
 STUDY_BTN_RADIUS = 12
-ROUND_SCALE = 0.8
+ROUND_SCALE = 0.64
 ROUND_ADJ_BTN_HEIGHT = int(round(80 * ROUND_SCALE))
 ROUND_ADJ_BTN_WIDTH = int(round(104 * ROUND_SCALE))
 ROUND_ADJ_BTN_FONT = ("Segoe UI", int(round(22 * ROUND_SCALE)), "bold")
 ROUND_ADJ_BTN_RADIUS = int(round(16 * ROUND_SCALE))
 ROUND_VALUE_FONT = ("Segoe UI", int(round(20 * ROUND_SCALE)), "bold")
 ROUND_UNIT_FONT = ("Segoe UI", int(round(16 * ROUND_SCALE)))
-ROUND_ON_FONT = ("Segoe UI", 14, "bold")
+ROUND_ON_INDICATOR = ("Segoe UI", 16)
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
 ROUND_TIME_BTN_COLOR = "#d35400"
@@ -457,15 +457,15 @@ class ProcedureGUI:
         head.pack(fill=tk.X)
         tk.Checkbutton(
             head,
-            text="On",
+            text="",
             variable=enabled_var,
             bg=PANEL,
             fg=TEXT,
             selectcolor=ROUND_ACTIVE,
             activebackground=PANEL,
             activeforeground=TEXT,
-            font=ROUND_ON_FONT,
-            padx=6,
+            font=ROUND_ON_INDICATOR,
+            padx=4,
             pady=4,
             command=self._refresh_round_highlight,
         ).pack(side=tk.RIGHT)
@@ -620,7 +620,7 @@ class ProcedureGUI:
 
     def _validate_study_settings(self):
         if not any(self._enabled_flags(self._round_enabled)):
-            raise ValueError("Enable at least one round (On)")
+            raise ValueError("Enable at least one round")
 
     def _run_action(self, title, fn):
         if self._busy:
