@@ -80,7 +80,7 @@ STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.1))
 STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
 STUDY_BTN_FONT = ("Segoe UI", 14, "bold")
 STUDY_BTN_RADIUS = 12
-ROUND_SCALE = 0.52
+ROUND_SCALE = round(0.52 * 0.9, 3)
 ROUND_ADJ_BTN_HEIGHT = int(round(80 * ROUND_SCALE))
 ROUND_ADJ_BTN_WIDTH = int(round(104 * ROUND_SCALE))
 ROUND_ADJ_BTN_FONT = ("Segoe UI", int(round(22 * ROUND_SCALE)), "bold")
@@ -531,7 +531,7 @@ class ProcedureGUI:
         round_row.pack(anchor="center")
 
         checks_col = tk.Frame(round_row, bg=PANEL)
-        checks_col.pack(side=tk.LEFT, padx=(0, gap))
+        checks_col.pack(side=tk.LEFT, padx=(0, gap), anchor="center")
         tk.Checkbutton(
             checks_col,
             text="",
@@ -558,10 +558,10 @@ class ProcedureGUI:
         ).pack(anchor="w", pady=(2, 0))
 
         controls_col = tk.Frame(round_row, bg=PANEL)
-        controls_col.pack(side=tk.LEFT)
+        controls_col.pack(side=tk.LEFT, anchor="center")
 
         trow = tk.Frame(controls_col, bg=PANEL)
-        trow.pack(anchor="w", pady=(0, 3))
+        trow.pack(anchor="center", pady=(0, 3))
         self._round_temp_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(
             side=tk.LEFT, padx=(0, gap)
         )
@@ -574,7 +574,7 @@ class ProcedureGUI:
         )
 
         mrow = tk.Frame(controls_col, bg=PANEL)
-        mrow.pack(anchor="w")
+        mrow.pack(anchor="center")
         self._round_time_btn(
             mrow, "−t", lambda idx=index: self._bump_incub_time(idx, -1)
         ).pack(side=tk.LEFT, padx=(0, gap))
