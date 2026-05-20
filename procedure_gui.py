@@ -77,6 +77,13 @@ STUDY_BTN_HEIGHT = int(round(40 * 1.3 * 1.3))
 STUDY_BTN_MIN_WIDTH = int(round(140 * 2))
 STUDY_BTN_FONT = ("Segoe UI", 14, "bold")
 STUDY_BTN_RADIUS = 12
+ROUND_ADJ_BTN_HEIGHT = 40
+ROUND_ADJ_BTN_WIDTH = 52
+ROUND_ADJ_BTN_FONT = ("Segoe UI", 11, "bold")
+ROUND_TEMP_BTN_COLOR = "#2980b9"
+ROUND_TEMP_BTN_HOVER = "#3498db"
+ROUND_TIME_BTN_COLOR = "#d35400"
+ROUND_TIME_BTN_HOVER = "#e67e22"
 MAIN_BTN_HEIGHT = 40
 SMALL_BTN_HEIGHT = 26
 PETRI_STEPPER_BTN_HEIGHT = 38
@@ -273,19 +280,48 @@ class ProcedureGUI:
         height=None,
         font=None,
         min_width=0,
+        color=CARD,
+        hover=SELECTED,
+        fg=TEXT,
     ):
         return self._mk_round_btn(
             parent,
             text,
             command,
-            color=CARD,
-            fg=TEXT,
-            hover=SELECTED,
+            color=color,
+            fg=fg,
+            hover=hover,
             height=height or SMALL_BTN_HEIGHT,
             font=font or ADJ_FONT,
-            radius=6,
+            radius=8,
             stretch=False,
             min_width=min_width,
+        )
+
+    def _round_temp_btn(self, parent, text, command):
+        return self._adj_btn(
+            parent,
+            text,
+            command,
+            color=ROUND_TEMP_BTN_COLOR,
+            hover=ROUND_TEMP_BTN_HOVER,
+            fg=TEXT_ON_COLOR,
+            height=ROUND_ADJ_BTN_HEIGHT,
+            font=ROUND_ADJ_BTN_FONT,
+            min_width=ROUND_ADJ_BTN_WIDTH,
+        )
+
+    def _round_time_btn(self, parent, text, command):
+        return self._adj_btn(
+            parent,
+            text,
+            command,
+            color=ROUND_TIME_BTN_COLOR,
+            hover=ROUND_TIME_BTN_HOVER,
+            fg=TEXT_ON_COLOR,
+            height=ROUND_ADJ_BTN_HEIGHT,
+            font=ROUND_ADJ_BTN_FONT,
+            min_width=ROUND_ADJ_BTN_WIDTH,
         )
 
     def _widget_bg(self, parent):
@@ -425,21 +461,29 @@ class ProcedureGUI:
 
         trow = tk.Frame(block, bg=PANEL)
         trow.pack(fill=tk.X, pady=(4, 2))
-        self._adj_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(side=tk.LEFT)
+        self._round_temp_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(
+            side=tk.LEFT, padx=(0, 4)
+        )
         tk.Label(trow, textvariable=temp_var, bg=PANEL, fg=ACCENT, font=VALUE_FONT, width=3).pack(
-            side=tk.LEFT, padx=2
+            side=tk.LEFT, padx=4
         )
         tk.Label(trow, text="°C", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
-        self._adj_btn(trow, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(side=tk.LEFT)
+        self._round_temp_btn(trow, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(
+            side=tk.LEFT, padx=(4, 0)
+        )
 
         mrow = tk.Frame(block, bg=PANEL)
         mrow.pack(fill=tk.X)
-        self._adj_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(side=tk.LEFT)
+        self._round_time_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(
+            side=tk.LEFT, padx=(0, 4)
+        )
         tk.Label(mrow, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=VALUE_FONT, width=3).pack(
-            side=tk.LEFT, padx=2
+            side=tk.LEFT, padx=4
         )
         tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
-        self._adj_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(side=tk.LEFT)
+        self._round_time_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(
+            side=tk.LEFT, padx=(4, 0)
+        )
 
     def _set_frame_bg(self, widget, bg):
         try:
