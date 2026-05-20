@@ -65,11 +65,11 @@ ADJ_FONT = ("Segoe UI", 10, "bold")
 PRESET_FONT = ("Segoe UI", 8)
 SMALL_FONT = ("Segoe UI", 8)
 VALUE_FONT = ("Segoe UI", 10, "bold")
-BTN_RADIUS = 10
-LEFT_BTN_HEIGHT = 46
-MAIN_BTN_HEIGHT = 44
-SMALL_BTN_HEIGHT = 30
-LEFT_BTN_GAP = 6
+BTN_RADIUS = 8
+LEFT_BTN_HEIGHT = 40
+MAIN_BTN_HEIGHT = 40
+SMALL_BTN_HEIGHT = 26
+LEFT_BTN_GAP = 4
 
 
 class ProcedureGUI:
@@ -188,6 +188,7 @@ class ProcedureGUI:
             fg=TEXT,
             hover="#d46a66",
             height=MAIN_BTN_HEIGHT,
+            stretch=True,
         ).pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
         # --- Center ---
@@ -234,7 +235,6 @@ class ProcedureGUI:
             "Start Incubation + Imaging",
             None,
             ACCENT3,
-            height=MAIN_BTN_HEIGHT,
         ).grid(row=1, column=0, sticky="ew", pady=(0, 6))
 
         scroll_host = tk.Frame(right_outer, bg=PANEL)
@@ -322,7 +322,7 @@ class ProcedureGUI:
                 height=SMALL_BTN_HEIGHT,
                 font=PRESET_FONT,
                 radius=6,
-                min_width=30,
+                stretch=False,
             ).pack(side=tk.LEFT, padx=2)
 
     def _set_incub_count(self, count):
@@ -344,7 +344,7 @@ class ProcedureGUI:
             height=SMALL_BTN_HEIGHT,
             font=ADJ_FONT,
             radius=6,
-            min_width=36,
+            stretch=False,
         )
 
     def _widget_bg(self, parent):
@@ -373,26 +373,36 @@ class ProcedureGUI:
         height=LEFT_BTN_HEIGHT,
         font=BTN_FONT,
         radius=BTN_RADIUS,
+        stretch=False,
         min_width=0,
     ):
         """Canvas button with rounded corners."""
         bg = self._widget_bg(parent)
         hover = hover or color
         wrap = tk.Frame(parent, bg=bg)
+        compact_w = min_width or max(28, len(text) * 8 + 14)
         canvas = tk.Canvas(
             wrap,
             height=height,
+            width=compact_w if not stretch else 1,
             bg=bg,
             highlightthickness=0,
             bd=0,
             cursor="hand2",
         )
-        canvas.pack(fill=tk.X, expand=True)
+        if stretch:
+            canvas.pack(fill=tk.X)
+        else:
+            canvas.pack()
+            wrap.pack_propagate(False)
+            wrap.configure(width=compact_w, height=height)
         state = {"fill": color}
 
         def redraw(_event=None):
             canvas.delete("all")
-            w = max(canvas.winfo_width(), min_width or 80)
+            w = canvas.winfo_width() if stretch else compact_w
+            if w < 4:
+                w = compact_w
             h = height
             self._paint_round_rect(canvas, 1, 1, w - 1, h - 1, radius, state["fill"])
             canvas.create_text(w / 2, h / 2, text=text, fill=fg, font=font)
@@ -412,8 +422,7 @@ class ProcedureGUI:
         canvas.bind("<Button-1>", on_click)
         canvas.bind("<Enter>", on_enter)
         canvas.bind("<Leave>", on_leave)
-        if min_width:
-            wrap.configure(width=min_width)
+        redraw()
         return wrap
 
     def _mk_btn(self, parent, text, command, color=ACCENT, width=20, height=LEFT_BTN_HEIGHT):
@@ -423,6 +432,7 @@ class ProcedureGUI:
             lambda t=text, f=command: self._run_action(t, f),
             color=color,
             height=height,
+            stretch=True,
         )
 
     def _incub_slot_row(self, parent, index, temp_var, time_var, enabled_var):
