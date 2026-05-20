@@ -92,6 +92,7 @@ ROUND_BLOCK_RADIUS = 10
 ROUND_ROW_GAP = 5
 ROUND_CONTROLS_SHIFT = 14
 ROUND_ON_INDICATOR = ("Segoe UI", 13)
+ROUND_LABEL_FONT = ("Segoe UI", int(round(14 * ROUND_SCALE)), "bold")
 ROUND_TEMP_BTN_COLOR = "#2980b9"
 ROUND_TEMP_BTN_HOVER = "#3498db"
 ROUND_TIME_BTN_COLOR = "#d35400"
@@ -595,6 +596,13 @@ class ProcedureGUI:
         self._round_time_btn(
             mrow, "t+", lambda idx=index: self._bump_incub_time(idx, 1)
         ).pack(side=tk.LEFT, padx=(gap, 0))
+        tk.Label(
+            round_row,
+            text=f"R{index + 1}",
+            bg=PANEL,
+            fg=MUTED,
+            font=ROUND_LABEL_FONT,
+        ).pack(side=tk.LEFT, padx=(gap, 0), anchor="center")
         self._sync_round_time_display(index)
         _redraw_round_shell(PANEL)
 
