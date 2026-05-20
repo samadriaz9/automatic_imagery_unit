@@ -379,22 +379,13 @@ class ProcedureGUI:
             font=LEFT_BTN_FONT,
         )
 
-    def _study_round_row(self, parent, index, temp_var, time_var, enabled_var):
+    def _study_round_row(self, parent, _index, temp_var, time_var, enabled_var):
         block = tk.Frame(parent, bg=PANEL, padx=4, pady=4)
         block.pack(fill=tk.X, pady=2)
         self._round_row_frames.append(block)
 
         head = tk.Frame(block, bg=PANEL)
         head.pack(fill=tk.X)
-        tk.Label(
-            head,
-            text=f"Round {index}",
-            bg=PANEL,
-            fg=TEXT,
-            font=VALUE_FONT,
-            width=8,
-            anchor="w",
-        ).pack(side=tk.LEFT)
         tk.Checkbutton(
             head,
             text="On",
@@ -408,20 +399,23 @@ class ProcedureGUI:
             command=self._refresh_round_highlight,
         ).pack(side=tk.RIGHT)
 
-        ctrl = tk.Frame(block, bg=PANEL)
-        ctrl.pack(fill=tk.X, pady=(4, 0))
-        self._adj_btn(ctrl, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(side=tk.LEFT)
-        tk.Label(ctrl, textvariable=temp_var, bg=PANEL, fg=ACCENT, font=VALUE_FONT, width=3).pack(
+        trow = tk.Frame(block, bg=PANEL)
+        trow.pack(fill=tk.X, pady=(4, 2))
+        self._adj_btn(trow, "−T", lambda v=temp_var: self._bump_temp(v, -1)).pack(side=tk.LEFT)
+        tk.Label(trow, textvariable=temp_var, bg=PANEL, fg=ACCENT, font=VALUE_FONT, width=3).pack(
             side=tk.LEFT, padx=2
         )
-        tk.Label(ctrl, text="°C", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
-        self._adj_btn(ctrl, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(side=tk.LEFT, padx=(0, 8))
-        self._adj_btn(ctrl, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(side=tk.LEFT)
-        tk.Label(ctrl, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=VALUE_FONT, width=3).pack(
+        tk.Label(trow, text="°C", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
+        self._adj_btn(trow, "T+", lambda v=temp_var: self._bump_temp(v, 1)).pack(side=tk.LEFT)
+
+        mrow = tk.Frame(block, bg=PANEL)
+        mrow.pack(fill=tk.X)
+        self._adj_btn(mrow, "−t", lambda v=time_var: self._bump_incub_time(v, -1)).pack(side=tk.LEFT)
+        tk.Label(mrow, textvariable=time_var, bg=PANEL, fg=ACCENT2, font=VALUE_FONT, width=3).pack(
             side=tk.LEFT, padx=2
         )
-        tk.Label(ctrl, text="min", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
-        self._adj_btn(ctrl, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(side=tk.LEFT)
+        tk.Label(mrow, text="min", bg=PANEL, fg=MUTED, font=SMALL_FONT).pack(side=tk.LEFT)
+        self._adj_btn(mrow, "t+", lambda v=time_var: self._bump_incub_time(v, 1)).pack(side=tk.LEFT)
 
     def _set_frame_bg(self, widget, bg):
         try:
