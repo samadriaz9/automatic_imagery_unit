@@ -225,7 +225,7 @@ def run_incubation_imaging_study(
     active = [i + 1 for i in range(NUM_STUDY_ROUNDS) if enabled[i]]
     _log(f"Incubation + imaging: {len(active)} round(s), petri={num_petri_dishes}")
 
-    for rnd in active:
+    for idx, rnd in enumerate(active):
         temp = temps[rnd - 1]
         mins = times[rnd - 1]
         label = f"{int(round(mins)):02d}min"
@@ -247,6 +247,11 @@ def run_incubation_imaging_study(
             experiment_dir=exp_dir,
             time_point_subdir=subdir,
         )
+
+        if idx < len(active) - 1:
+            next_rnd = active[idx + 1]
+            _log(f"  Round {rnd} complete — all home before round {next_rnd}")
+            step_01_all_home()
 
     step_05_post_imaging_cleanup()
     _log(f"Incubation + imaging complete: {exp_dir}")
