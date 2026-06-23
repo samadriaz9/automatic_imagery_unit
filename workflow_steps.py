@@ -37,7 +37,7 @@ def step_01_all_home():
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2400)
-    incubator_lid_down(300)
+    incubator_lid_down(550)
 
 
 def step_02_insert_petri_dishes():
@@ -51,7 +51,7 @@ def step_03_shift_for_incubation():
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2400)
-    incubator_lid_down(400)
+    incubator_lid_down(550)
 
 
 def step_04_incubation(on_tick=None):
@@ -81,7 +81,7 @@ def step_05_post_imaging_cleanup():
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2400)
-    incubator_lid_down(300)
+    incubator_lid_down(550)
 
 
 def step_06_sterilize():
