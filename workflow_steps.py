@@ -1,7 +1,7 @@
 """
 Six-step automation workflow — callable from CLI (main.py) or procedure_gui.py.
 """
-"abc commit"
+
 import os
 import time
 
@@ -12,9 +12,12 @@ from device_config import (
     DEFAULT_ROUND_ENABLED,
     DEFAULT_ROUND_TEMPS,
     DEFAULT_ROUND_TIMES_MIN,
+    DISHES_PER_TRAY_ROW,
     IMAGING_COLS,
     IMAGING_ROWS,
     MAX_PETRI_DISHES,
+    MID_ROW_IMAGING_MIN,
+    MID_ROW_IMAGING_TEMP_C,
     NUM_INCUBATION_SLOTS,
     NUM_STUDY_ROUNDS,
     STEP_INCUBATION_MINUTES,
@@ -26,7 +29,11 @@ from device_config import (
 )
 from camera_module import Camera_home, Camera_up
 from incubator_lid import incubator_lid_down, incubator_lid_home
-from incubation_module import Start_incubation
+from incubation_module import (
+    Start_incubation,
+    UPPER_HEATER_PIN,
+    release_incubation_heaters,
+)
 from imaging import _next_exp_dir, data_root, start_multi_petri_imaging
 from petri_dishes import petri_dishes_home, petri_dishes_up
 
@@ -90,13 +97,44 @@ def step_06_sterilize():
     petri_dishes_home()
 
 
+def step_05_prepare_imaging_row2():
+    """Move to imaging start for tray row 2 (petri dishes 6–10)."""
+    incubator_lid_home()
+    petri_dishes_home()
+    Camera_home()
+    Camera_up(CAMERA_DISH_PRE_UP_ROW2)
+    petri_dishes_up(PETRI_DISH_PRE_UP_ROW2)
+
+
+def _run_multi_petri_capture(num, capture_root, first_dish, last_dish):
+    start_multi_petri_imaging(
+        num_petri_dishes=num,
+        experiment_dir=capture_root,
+        tray_cols=PETRI_TRAY_COLS,
+        petri_pre_up_row2=PETRI_DISH_PRE_UP_ROW2,
+        camera_pre_up_row2=CAMERA_DISH_PRE_UP_ROW2,
+        petri_offset_per_dish=PETRI_STEPSIZE * 7,
+        camera_offset_per_dish=CAMERA_STEPSIZE,
+        rows=IMAGING_ROWS,
+        cols=IMAGING_COLS,
+        camera_step_per_col=CAMERA_STEPSIZE,
+        petri_step_per_row=PETRI_STEPSIZE,
+        first_dish=first_dish,
+        last_dish=last_dish,
+    )
+
+
 def capture_petri_dishes(
     num_petri_dishes,
     experiment_dir=None,
     time_point_subdir=None,
+    on_tick=None,
 ):
     """
     Power on camera if needed, run multi-petri capture, power off camera.
+
+    With 10 dishes: row 1 (dishes 1–5) → all home → 4 min upper-only incubation
+    at 37 °C → row 2 (dishes 6–10). All images go to the same experiment folder.
 
     Returns experiment directory path used for captures.
     """
@@ -114,20 +152,33 @@ def capture_petri_dishes(
     if not ready:
         raise RuntimeError("USB camera not available")
 
+    split_rows = num == MAX_PETRI_DISHES and num == DISHES_PER_TRAY_ROW * 2
+
     try:
-        start_multi_petri_imaging(
-            num_petri_dishes=num,
-            experiment_dir=capture_root,
-            tray_cols=PETRI_TRAY_COLS,
-            petri_pre_up_row2=PETRI_DISH_PRE_UP_ROW2,
-            camera_pre_up_row2=CAMERA_DISH_PRE_UP_ROW2,
-            petri_offset_per_dish=PETRI_STEPSIZE * 7,
-            camera_offset_per_dish=CAMERA_STEPSIZE,
-            rows=IMAGING_ROWS,
-            cols=IMAGING_COLS,
-            camera_step_per_col=CAMERA_STEPSIZE,
-            petri_step_per_row=PETRI_STEPSIZE,
-        )
+        if split_rows:
+            row1_end = DISHES_PER_TRAY_ROW
+            row2_start = DISHES_PER_TRAY_ROW + 1
+            print(
+                f"[Imaging] Split capture: row 1 (dishes 1-{row1_end}), "
+                f"mid incubation, row 2 (dishes {row2_start}-{num})"
+            )
+            _run_multi_petri_capture(num, capture_root, 1, row1_end)
+            print("[Imaging] Row 1 complete — all home before mid-row incubation")
+            step_01_all_home()
+            print(
+                f"[Imaging] Mid-row incubation: {MID_ROW_IMAGING_TEMP_C:g}°C "
+                f"for {MID_ROW_IMAGING_MIN:g} min (upper heater only)"
+            )
+            Start_incubation(
+                MID_ROW_IMAGING_TEMP_C,
+                MID_ROW_IMAGING_MIN,
+                on_tick=on_tick,
+                heater_pins=(UPPER_HEATER_PIN,),
+            )
+            step_05_prepare_imaging_row2()
+            _run_multi_petri_capture(num, capture_root, row2_start, num)
+        else:
+            _run_multi_petri_capture(num, capture_root, 1, num)
     finally:
         power_off_usb_camera()
 
@@ -225,33 +276,44 @@ def run_incubation_imaging_study(
     active = [i + 1 for i in range(NUM_STUDY_ROUNDS) if enabled[i]]
     _log(f"Incubation + imaging: {len(active)} round(s), petri={num_petri_dishes}")
 
-    for idx, rnd in enumerate(active):
-        temp = temps[rnd - 1]
-        mins = times[rnd - 1]
-        label = f"{int(round(mins)):02d}min"
-        subdir = label
-        if os.path.exists(os.path.join(exp_dir, subdir)):
-            subdir = f"{label}_r{rnd}"
+    try:
+        for idx, rnd in enumerate(active):
+            temp = temps[rnd - 1]
+            mins = times[rnd - 1]
+            label = f"{int(round(mins)):02d}min"
+            subdir = label
+            if os.path.exists(os.path.join(exp_dir, subdir)):
+                subdir = f"{label}_r{rnd}"
 
-        _log(f"  Round {rnd}: {temp:g}°C, {mins:g} min → capture → {subdir}/")
-        if on_round_start:
-            try:
-                on_round_start(rnd)
-            except Exception:
-                pass
+            is_final_round = idx == len(active) - 1
+            _log(f"  Round {rnd}: {temp:g}°C, {mins:g} min → capture → {subdir}/")
+            if on_round_start:
+                try:
+                    on_round_start(rnd)
+                except Exception:
+                    pass
 
-        Start_incubation(temp, mins, on_tick=on_tick)
-        step_05_prepare_imaging()
-        capture_petri_dishes(
-            num_petri_dishes,
-            experiment_dir=exp_dir,
-            time_point_subdir=subdir,
-        )
+            Start_incubation(
+                temp,
+                mins,
+                on_tick=on_tick,
+                keep_upper_heater_on_exit=not is_final_round,
+            )
+            step_05_prepare_imaging()
+            capture_petri_dishes(
+                num_petri_dishes,
+                experiment_dir=exp_dir,
+                time_point_subdir=subdir,
+                on_tick=on_tick,
+            )
+            release_incubation_heaters()
 
-        if idx < len(active) - 1:
-            next_rnd = active[idx + 1]
-            _log(f"  Round {rnd} complete — all home before round {next_rnd}")
-            step_01_all_home()
+            if not is_final_round:
+                next_rnd = active[idx + 1]
+                _log(f"  Round {rnd} complete — all home before round {next_rnd}")
+                step_01_all_home()
+    finally:
+        release_incubation_heaters()
 
     step_05_post_imaging_cleanup()
     _log(f"Incubation + imaging complete: {exp_dir}")

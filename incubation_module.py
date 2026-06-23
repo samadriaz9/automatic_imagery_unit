@@ -11,6 +11,7 @@ except Exception:
 LOWER_HEATER_PIN = 12  # BCM 12, physical pin 32
 UPPER_HEATER_PIN = 26  # BCM 26, physical pin 37
 UPPER_HEATER_DUTY_BOOST = 1.30  # upper runs 30% hotter than lower (same PID base)
+LOWER_HEATER_OFF_REMAINING_MIN = 4.0  # last N min: lower off, upper only until incubation ends
 HEATER_DUTY_SCALE = {
     LOWER_HEATER_PIN: 1.0,
     UPPER_HEATER_PIN: UPPER_HEATER_DUTY_BOOST,
@@ -18,6 +19,36 @@ HEATER_DUTY_SCALE = {
 DEFAULT_HEATER_PINS = (LOWER_HEATER_PIN, UPPER_HEATER_PIN)
 # Legacy alias (first / lower heater)
 RPWM_PIN = LOWER_HEATER_PIN
+
+_held_upper_channels = []
+
+
+def _stop_channel(ch):
+    try:
+        ch["pwm"].ChangeDutyCycle(0)
+        ch["pwm"].stop()
+    except Exception:
+        pass
+
+
+def release_incubation_heaters():
+    """Turn off any upper heater left running after incubation (e.g. between study rounds)."""
+    global _held_upper_channels
+    if not _held_upper_channels:
+        return
+    for ch in list(_held_upper_channels):
+        _stop_channel(ch)
+    _held_upper_channels = []
+    print("[Incubation] Held upper heater OFF.")
+
+
+def _stop_heater_channels(channels, pins_to_stop=None):
+    stop_pins = pins_to_stop
+    if stop_pins is None:
+        stop_pins = {ch["pin"] for ch in channels}
+    for ch in channels:
+        if ch["pin"] in stop_pins:
+            _stop_channel(ch)
 
 
 def _read_ds18b20_c(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
@@ -43,11 +74,24 @@ def _read_ds18b20_c(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
     return milli_c / 1000.0
 
 
-def _set_heaters_duty_smooth(channels, current_base, target_base, max_duty, ramp_step, ramp_delay):
+def _apply_heater_duties(channels, base, max_duty, lower_active=True):
+    for ch in channels:
+        if ch["pin"] == LOWER_HEATER_PIN and not lower_active:
+            level = 0.0
+        else:
+            level = max(0.0, min(float(max_duty), float(base) * ch["scale"]))
+        ch["pwm"].ChangeDutyCycle(level)
+        ch["duty"] = level
+
+
+def _set_heaters_duty_smooth(
+    channels, current_base, target_base, max_duty, ramp_step, ramp_delay, lower_active=True
+):
     """Ramp PID base duty; each heater gets base * its scale (capped at max_duty)."""
     target_base = max(0.0, min(float(max_duty), float(target_base)))
     base = float(current_base)
     if abs(target_base - base) < 0.001:
+        _apply_heater_duties(channels, base, max_duty, lower_active)
         return base
 
     direction = 1.0 if target_base > base else -1.0
@@ -58,10 +102,7 @@ def _set_heaters_duty_smooth(channels, current_base, target_base, max_duty, ramp
             base = target_base
         if direction < 0 and base < target_base:
             base = target_base
-        for ch in channels:
-            level = max(0.0, min(float(max_duty), base * ch["scale"]))
-            ch["pwm"].ChangeDutyCycle(level)
-            ch["duty"] = level
+        _apply_heater_duties(channels, base, max_duty, lower_active)
         time.sleep(float(ramp_delay))
     return base
 
@@ -86,13 +127,8 @@ def _start_heater_channels(heater_pins, pwm_freq, duty_scale=None):
     return channels
 
 
-def _stop_heater_channels(channels):
-    for ch in channels:
-        try:
-            ch["pwm"].ChangeDutyCycle(0)
-            ch["pwm"].stop()
-        except Exception:
-            pass
+def _stop_heater_channels_all(channels):
+    _stop_heater_channels(channels)
 
 
 def _format_heater_duties(channels):
@@ -114,12 +150,20 @@ def Start_incubation(
     max_duty=20.0,
     ramp_step=2.0,
     ramp_delay=0.1,
+    lower_off_remaining_min=None,
+    keep_upper_heater_on_exit=False,
 ):
     """
     Maintain incubation temperature using PID + one or more BTS PWM heater outputs.
 
     Both heaters use the same DS18B20 reading and PID output. The upper heater
     (GPIO 26 / pin 37) receives 30% more duty than the lower (GPIO 12 / pin 32).
+    In the last ``lower_off_remaining_min`` minutes, the lower heater turns off
+    and only the upper heater runs until incubation ends.
+
+    If ``keep_upper_heater_on_exit`` is True, the upper heater stays on at the
+    last PID duty after incubation (for imaging). Call ``release_incubation_heaters()``
+    when heating should stop.
 
     Args:
         target_temp_c: target temperature in Celsius.
@@ -132,12 +176,19 @@ def Start_incubation(
         max_duty: safety cap per heater duty cycle (%).
         ramp_step/ramp_delay: soft-ramp behavior to reduce thermal overshoot.
         poll_seconds: sensor polling interval.
+        lower_off_remaining_min: minutes before end to disable lower heater (default 4).
+        keep_upper_heater_on_exit: keep upper heater PWM on after incubation ends.
         on_tick: optional callback(elapsed_s, remaining_s, temp_c, target_temp_c).
     """
+    global _held_upper_channels
+    release_incubation_heaters()
     target_temp_c = float(target_temp_c)
     duration_s = max(0.0, float(duration_minutes) * 60.0)
     poll_seconds = max(0.2, float(poll_seconds))
     max_duty = max(1.0, min(100.0, float(max_duty)))
+    if lower_off_remaining_min is None:
+        lower_off_remaining_min = LOWER_HEATER_OFF_REMAINING_MIN
+    lower_off_remaining_s = max(0.0, float(lower_off_remaining_min) * 60.0)
 
     if heater_pins is None:
         heater_pins = (int(pwm_pin),) if pwm_pin is not None else DEFAULT_HEATER_PINS
@@ -157,7 +208,8 @@ def Start_incubation(
     )
     print(
         f"[Incubation] Heater PWM pins={heater_pins}, duty scale: {scale_desc}, "
-        f"freq={int(pwm_freq)}Hz, PID(Kp={kp}, Ki={ki}, Kd={kd}), max_duty={max_duty:.1f}%"
+        f"freq={int(pwm_freq)}Hz, PID(Kp={kp}, Ki={ki}, Kd={kd}), max_duty={max_duty:.1f}%, "
+        f"lower off when <= {lower_off_remaining_min:g} min remain"
     )
 
     heater_channels = _start_heater_channels(heater_pins, pwm_freq, scale_map)
@@ -166,6 +218,7 @@ def Start_incubation(
     i_term = 0.0
     prev_error = 0.0
     current_duty = 0.0
+    lower_cutoff_logged = False
     if PID is not None:
         pid = PID(float(kp), float(ki), float(kd), setpoint=target_temp_c)
         pid.output_limits = (0.0, max_duty)
@@ -195,6 +248,16 @@ def Start_incubation(
 
         while (time.time() - start) < duration_s:
             temp_c = _read_ds18b20_c()
+            remaining = max(0.0, duration_s - (time.time() - start))
+            use_lower_cutoff = duration_s > lower_off_remaining_s
+            lower_active = remaining > lower_off_remaining_s if use_lower_cutoff else True
+            if not lower_active and not lower_cutoff_logged:
+                print(
+                    f"[Incubation] <= {lower_off_remaining_min:g} min remaining — "
+                    "lower heater OFF, upper only until incubation ends"
+                )
+                lower_cutoff_logged = True
+
             if pid is not None:
                 requested_duty = float(pid(temp_c))
             else:
@@ -212,6 +275,7 @@ def Start_incubation(
                 max_duty=max_duty,
                 ramp_step=ramp_step,
                 ramp_delay=ramp_delay,
+                lower_active=lower_active,
             )
             print(
                 f"[Incubation] {temp_c:.2f}C -> base {current_duty:.1f}% "
@@ -220,8 +284,24 @@ def Start_incubation(
             _notify_tick(temp_c)
             time.sleep(poll_seconds)
     finally:
-        _stop_heater_channels(heater_channels)
-        print("[Incubation] Completed. All heaters OFF.")
+        global _held_upper_channels
+        if keep_upper_heater_on_exit:
+            _stop_heater_channels(heater_channels, pins_to_stop={LOWER_HEATER_PIN})
+            upper_ch = next(
+                (ch for ch in heater_channels if ch["pin"] == UPPER_HEATER_PIN), None
+            )
+            if upper_ch and upper_ch["duty"] > 0:
+                _held_upper_channels = [upper_ch]
+                print(
+                    f"[Incubation] Completed. Upper heater held ON at "
+                    f"{upper_ch['duty']:.1f}% for imaging."
+                )
+            else:
+                _stop_heater_channels_all(heater_channels)
+                print("[Incubation] Completed. All heaters OFF.")
+        else:
+            _stop_heater_channels_all(heater_channels)
+            print("[Incubation] Completed. All heaters OFF.")
 
 
 def keep_temperature_pid(temperature_to_keep_c, minutes, **kwargs):

@@ -31,6 +31,11 @@ INCUBATION_MIN_MIN = 0.5
 INCUBATION_MIN_MAX = 600.0
 INCUBATION_HOUR_STEP = 0.25
 
+# Split imaging (10 dishes): row-1 capture → home → mid incubation → row-2 capture
+MID_ROW_IMAGING_TEMP_C = 37.0
+MID_ROW_IMAGING_MIN = 4.0
+DISHES_PER_TRAY_ROW = PETRI_TRAY_COLS
+
 # Legacy aliases (workflow / imports)
 NUM_INCUBATION_SLOTS = 3
 NUM_PICTURE_SLOTS = NUM_STUDY_ROUNDS

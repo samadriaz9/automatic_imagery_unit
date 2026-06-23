@@ -392,6 +392,8 @@ def start_multi_petri_imaging(
     camera_step_per_col=85,
     petri_step_per_row=85,
     settle_seconds=0.15,
+    first_dish=1,
+    last_dish=None,
     **capture_kwargs,
 ):
     """
@@ -408,6 +410,9 @@ def start_multi_petri_imaging(
 
     Dishes 7–10: same incremental moves as 2–5.
 
+    ``first_dish`` / ``last_dish`` (1-based, inclusive) limit which dishes are captured
+    in this call. When ``first_dish`` is the first dish of row 2, row-2 homing runs first.
+
     One dish  → images in ``data/exp_XX/`` (no subfolder).
     N dishes  → ``data/exp_XX/petri_01/`` … ``petri_NN/``.
 
@@ -418,6 +423,10 @@ def start_multi_petri_imaging(
     from petri_dishes import petri_dishes_home, petri_dishes_up, petri_dishes_down
 
     num = max(1, min(10, int(num_petri_dishes)))
+    first_dish = max(1, min(num, int(first_dish)))
+    last_dish = min(num, int(last_dish) if last_dish is not None else num)
+    if first_dish > last_dish:
+        raise ValueError(f"first_dish ({first_dish}) must be <= last_dish ({last_dish})")
     tc = max(1, int(tray_cols))
     row_step = int(petri_step_per_row)
     col_step = int(camera_step_per_col)
@@ -430,7 +439,8 @@ def start_multi_petri_imaging(
         exp_dir = _next_exp_dir(output_root)
 
     print(
-        f"[Imaging] Multi-petri run: {num} dish(es), {tc} per row, exp={exp_dir}, "
+        f"[Imaging] Multi-petri run: dishes {first_dish}-{last_dish} of {num}, "
+        f"{tc} per row, exp={exp_dir}, "
         f"between dishes in a row: petri DOWN {petri_off}, camera DOWN {cam_off}; "
         f"row-2 start after homing: petri UP {int(petri_pre_up_row2)}, camera UP {int(camera_pre_up_row2)}"
     )
@@ -444,9 +454,20 @@ def start_multi_petri_imaging(
     }
     pattern_kw.update(capture_kwargs)
 
-    for dish in range(1, num + 1):
+    for dish in range(first_dish, last_dish + 1):
         print(f"[Imaging] ===== Petri dish {dish} / {num} =====")
-        if dish > 1:
+        if dish == first_dish:
+            if dish == tc + 1:
+                print(
+                    f"[Imaging] Row 2 start (dish {dish}): homing, then camera UP "
+                    f"{int(camera_pre_up_row2)}, petri UP {int(petri_pre_up_row2)}"
+                )
+                Camera_home()
+                petri_dishes_home()
+                Camera_up(int(camera_pre_up_row2))
+                petri_dishes_up(int(petri_pre_up_row2))
+                time.sleep(float(settle_seconds))
+        elif dish > first_dish:
             if dish == tc + 1:
                 print(
                     f"[Imaging] Second row (dish {dish}): homing, then camera UP "

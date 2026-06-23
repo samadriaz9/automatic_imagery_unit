@@ -426,6 +426,13 @@ def shutdown_all():
     _shutdown_done = True
     print("\n[Shutdown] Releasing GPIO and stopping outputs...")
 
+    try:
+        from incubation_module import release_incubation_heaters
+
+        release_incubation_heaters()
+    except Exception as e:
+        print(f"  Cleanup warning (incubation heaters): {e}")
+
     # Stop DC/PWM and relays first; then stepper modules; solenoid off; GPIO.cleanup last.
     for name, fn in (
         ("filteration_suction_pump", filteration_suction_cleanup),
