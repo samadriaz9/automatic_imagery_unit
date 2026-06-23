@@ -8,7 +8,11 @@ except Exception:
     PID = None
 
 
-RPWM_PIN = 12  # BCM 12, physical pin 32 (heater BTS PWM input)
+UPPER_HEATER_PIN = 12  # BCM 12, physical pin 32 (upper BTS PWM)
+LOWER_HEATER_PIN = 26  # BCM 26, physical pin 37 (lower BTS PWM)
+DEFAULT_HEATER_PINS = (UPPER_HEATER_PIN, LOWER_HEATER_PIN)
+# Legacy alias
+RPWM_PIN = UPPER_HEATER_PIN
 
 
 def _read_ds18b20_c(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
@@ -34,8 +38,8 @@ def _read_ds18b20_c(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
     return milli_c / 1000.0
 
 
-def _set_heater_duty_smooth(pwm, current_duty, target_duty, max_duty, ramp_step, ramp_delay):
-    """Ramp duty cycle gradually to avoid aggressive heater switching."""
+def _set_heaters_duty_smooth(pwms, current_duty, target_duty, max_duty, ramp_step, ramp_delay):
+    """Ramp all heater PWM channels together to the same duty cycle."""
     target_duty = max(0.0, min(float(max_duty), float(target_duty)))
     duty = float(current_duty)
     if abs(target_duty - duty) < 0.001:
@@ -49,9 +53,31 @@ def _set_heater_duty_smooth(pwm, current_duty, target_duty, max_duty, ramp_step,
             duty = target_duty
         if direction < 0 and duty < target_duty:
             duty = target_duty
-        pwm.ChangeDutyCycle(max(0.0, min(float(max_duty), duty)))
+        level = max(0.0, min(float(max_duty), duty))
+        for pwm in pwms:
+            pwm.ChangeDutyCycle(level)
         time.sleep(float(ramp_delay))
     return duty
+
+
+def _start_heater_pwms(heater_pins, pwm_freq):
+    GPIO.setmode(GPIO.BCM)
+    pwms = []
+    for pin in heater_pins:
+        GPIO.setup(int(pin), GPIO.OUT)
+        pwm = GPIO.PWM(int(pin), int(pwm_freq))
+        pwm.start(0)
+        pwms.append(pwm)
+    return pwms
+
+
+def _stop_heater_pwms(pwms):
+    for pwm in pwms:
+        try:
+            pwm.ChangeDutyCycle(0)
+            pwm.stop()
+        except Exception:
+            pass
 
 
 def Start_incubation(
@@ -59,26 +85,30 @@ def Start_incubation(
     duration_minutes,
     poll_seconds=2.0,
     on_tick=None,
-    pwm_pin=RPWM_PIN,
+    heater_pins=None,
+    pwm_pin=None,
     pwm_freq=100,
     kp=10.0,
     ki=0.2,
     kd=2.0,
     max_duty=20.0,
-    # Faster ramp so heater actually turns on quickly.
     ramp_step=2.0,
     ramp_delay=0.1,
 ):
     """
-    Maintain incubation temperature using PID + BTS PWM heater output.
+    Maintain incubation temperature using PID + one or more BTS PWM heater outputs.
+
+    Both upper and lower heaters are driven from the same DS18B20 reading and the
+    same PID output so they heat together for stable chamber temperature.
 
     Args:
         target_temp_c: target temperature in Celsius.
         duration_minutes: how long to maintain incubation.
-        pwm_pin: BCM pin used as BTS PWM input (heater channel).
+        heater_pins: BCM pin tuple for BTS PWM inputs (default upper + lower).
+        pwm_pin: legacy single-pin alias; ignored when heater_pins is set.
         pwm_freq: PWM frequency in Hz.
         kp, ki, kd: PID gains.
-        max_duty: safety cap for heater duty cycle (%).
+        max_duty: safety cap for each heater duty cycle (%).
         ramp_step/ramp_delay: soft-ramp behavior to reduce thermal overshoot.
         poll_seconds: sensor polling interval.
         on_tick: optional callback(elapsed_s, remaining_s, temp_c, target_temp_c).
@@ -88,18 +118,21 @@ def Start_incubation(
     poll_seconds = max(0.2, float(poll_seconds))
     max_duty = max(1.0, min(100.0, float(max_duty)))
 
+    if heater_pins is None:
+        heater_pins = (int(pwm_pin),) if pwm_pin is not None else DEFAULT_HEATER_PINS
+    heater_pins = tuple(int(p) for p in heater_pins)
+    if not heater_pins:
+        raise ValueError("At least one heater pin is required")
+
     print(
         f"[Incubation] Start PID: target={target_temp_c:.2f}C, duration={duration_minutes} min"
     )
     print(
-        f"[Incubation] Heater PWM pin={int(pwm_pin)}, freq={int(pwm_freq)}Hz, "
-        f"PID(Kp={kp}, Ki={ki}, Kd={kd}), max_duty={max_duty:.1f}%"
+        f"[Incubation] Heater PWM pins={heater_pins}, freq={int(pwm_freq)}Hz, "
+        f"PID(Kp={kp}, Ki={ki}, Kd={kd}), max_duty={max_duty:.1f}% each"
     )
 
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(int(pwm_pin), GPIO.OUT)
-    heater_pwm = GPIO.PWM(int(pwm_pin), int(pwm_freq))
-    heater_pwm.start(0)
+    heater_pwms = _start_heater_pwms(heater_pins, pwm_freq)
 
     pid = None
     i_term = 0.0
@@ -108,7 +141,6 @@ def Start_incubation(
     if PID is not None:
         pid = PID(float(kp), float(ki), float(kd), setpoint=target_temp_c)
         pid.output_limits = (0.0, max_duty)
-        # Run PID update at same cadence as sensor polling (for consistency).
         try:
             pid.sample_time = float(poll_seconds)
         except Exception:
@@ -138,7 +170,6 @@ def Start_incubation(
             if pid is not None:
                 requested_duty = float(pid(temp_c))
             else:
-                # Fallback PID when simple_pid is unavailable.
                 error = target_temp_c - temp_c
                 i_term += error * poll_seconds
                 d_term = (error - prev_error) / poll_seconds
@@ -146,25 +177,23 @@ def Start_incubation(
                 raw = (float(kp) * error) + (float(ki) * i_term) + (float(kd) * d_term)
                 requested_duty = max(0.0, min(max_duty, raw))
 
-            current_duty = _set_heater_duty_smooth(
-                heater_pwm,
+            current_duty = _set_heaters_duty_smooth(
+                heater_pwms,
                 current_duty=current_duty,
                 target_duty=requested_duty,
                 max_duty=max_duty,
                 ramp_step=ramp_step,
                 ramp_delay=ramp_delay,
             )
-            print(f"[Incubation] {temp_c:.2f}C -> heater {current_duty:.1f}%")
+            print(
+                f"[Incubation] {temp_c:.2f}C -> heaters {current_duty:.1f}% "
+                f"({len(heater_pwms)} channel(s))"
+            )
             _notify_tick(temp_c)
             time.sleep(poll_seconds)
     finally:
-        # Safety: always leave heater OFF on function exit/error.
-        try:
-            heater_pwm.ChangeDutyCycle(0)
-            heater_pwm.stop()
-        except Exception:
-            pass
-        print("[Incubation] Completed. Heater OFF.")
+        _stop_heater_pwms(heater_pwms)
+        print("[Incubation] Completed. All heaters OFF.")
 
 
 def keep_temperature_pid(temperature_to_keep_c, minutes, **kwargs):
@@ -175,4 +204,3 @@ def keep_temperature_pid(temperature_to_keep_c, minutes, **kwargs):
         keep_temperature_pid(37.0, 60)  # keep 37C for 60 minutes
     """
     return Start_incubation(temperature_to_keep_c, minutes, **kwargs)
-
