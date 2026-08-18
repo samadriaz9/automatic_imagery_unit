@@ -44,7 +44,7 @@ def step_01_all_home():
     incubator_lid_home()
     petri_dishes_home()
     petri_dishes_up(2370)
-    incubator_lid_down(650)
+    incubator_lid_down(700)
 
 
 def step_02_insert_petri_dishes():
@@ -57,8 +57,8 @@ def step_03_shift_for_incubation():
     """Step 3: Shift stage for incubation region."""
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(550)
+    petri_dishes_up(2370)
+    incubator_lid_down(700)
 
 
 def step_04_incubation(on_tick=None):
@@ -87,8 +87,8 @@ def step_05_post_imaging_cleanup():
     """Step 5b: Park after imaging."""
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(550)
+    petri_dishes_up(2370)
+    incubator_lid_down(700)
 
 
 def step_06_sterilize():
