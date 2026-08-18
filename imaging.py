@@ -24,6 +24,16 @@ from camera_module import Camera_up, Camera_down
 from petri_dishes import petri_dishes_up
 
 
+class CameraDisconnectError(RuntimeError):
+    """USB camera dropped during imaging; caller should home, incubate, and retry."""
+
+    def __init__(self, message, dish=None, row=None, col=None):
+        super().__init__(message)
+        self.dish = dish
+        self.row = row
+        self.col = col
+
+
 def _ensure_dir(path):
     os.makedirs(path, exist_ok=True)
     return path
@@ -48,6 +58,22 @@ def _next_exp_dir(output_root=None):
             os.makedirs(path, exist_ok=False)
             return path
         idx += 1
+
+
+def _open_usb_capture(device_index):
+    """Open the USB camera; return None if the device cannot be opened."""
+    idx = int(device_index)
+    if sys.platform.startswith("linux"):
+        cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+    else:
+        cap = cv2.VideoCapture(idx)
+    if not cap.isOpened():
+        try:
+            cap.release()
+        except Exception:
+            pass
+        return None
+    return cap
 
 
 def _capture_frame(cap, out_path, flush_frames=4, read_retries=5, square_crop=False):
@@ -277,12 +303,9 @@ def start_imaging_capture_pattern(
     output_dir = _ensure_dir(os.path.join(base_dir, stage_subdir)) if stage_subdir else base_dir
 
     idx = int(camera_device_index)
-    if sys.platform.startswith("linux"):
-        cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
-    else:
-        cap = cv2.VideoCapture(idx)
-    if not cap.isOpened():
-        raise RuntimeError(
+    cap = _open_usb_capture(idx)
+    if cap is None:
+        raise CameraDisconnectError(
             f"Could not open USB camera index {idx} (/dev/video{idx}). "
             "Ensure no other code holds the device (stop preview threads first). "
             "If the device is not at video0, pass camera_device_index=..."
@@ -315,15 +338,26 @@ def start_imaging_capture_pattern(
                         cap.release()
                     except Exception:
                         pass
-                    if sys.platform.startswith("linux"):
-                        cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
-                    else:
-                        cap = cv2.VideoCapture(idx)
-                    if not cap.isOpened():
-                        raise RuntimeError(
-                            f"Could not reopen USB camera index {idx} after capture failure"
+                    cap = _open_usb_capture(idx)
+                    if cap is None:
+                        raise CameraDisconnectError(
+                            f"USB camera disconnected at row {r + 1}, col {c + 1}",
+                            row=r,
+                            col=c,
                         ) from exc
-                    _capture_frame(cap, out_path, square_crop=bool(square_crop))
+                    try:
+                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+                    except Exception:
+                        pass
+                    try:
+                        _capture_frame(cap, out_path, square_crop=bool(square_crop))
+                    except Exception as exc2:
+                        raise CameraDisconnectError(
+                            f"USB camera disconnected at row {r + 1}, col {c + 1}: {exc2}",
+                            row=r,
+                            col=c,
+                        ) from exc2
                 image_idx += 1
                 time.sleep(settle_seconds)
 
@@ -370,7 +404,11 @@ def start_imaging_capture_pattern(
             print(f"[Imaging] Mosaic saved: {path}")
         return output_dir
     finally:
-        cap.release()
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
 
 
 def petri_dish_subdir(dish_number):
@@ -489,12 +527,16 @@ def start_multi_petri_imaging(
             time.sleep(float(settle_seconds))
 
         subdir = petri_dish_subdir(dish) if num > 1 else None
-        out = start_imaging_capture_pattern(
-            output_root=output_root,
-            experiment_dir=exp_dir,
-            stage_subdir=subdir,
-            **pattern_kw,
-        )
+        try:
+            out = start_imaging_capture_pattern(
+                output_root=output_root,
+                experiment_dir=exp_dir,
+                stage_subdir=subdir,
+                **pattern_kw,
+            )
+        except CameraDisconnectError as exc:
+            exc.dish = dish
+            raise
         print(f"[Imaging] Dish {dish} saved: {out}")
 
     return exp_dir

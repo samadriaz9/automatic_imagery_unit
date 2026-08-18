@@ -296,8 +296,73 @@ class ProcedureGUI:
             min_width=STUDY_BTN_MIN_WIDTH,
         ).pack(fill=tk.X, pady=(0, 6))
 
-        rounds_box = tk.Frame(right_outer, bg=PANEL)
-        rounds_box.pack(fill=tk.BOTH, expand=True)
+        scroll_host = tk.Frame(right_outer, bg=PANEL)
+        scroll_host.pack(fill=tk.BOTH, expand=True)
+        scroll_host.columnconfigure(0, weight=1)
+        scroll_host.rowconfigure(0, weight=1)
+
+        rounds_canvas = tk.Canvas(
+            scroll_host, bg=PANEL, highlightthickness=0, bd=0
+        )
+        rounds_scroll = tk.Scrollbar(
+            scroll_host,
+            orient=tk.VERTICAL,
+            command=rounds_canvas.yview,
+            bg=CARD,
+            troughcolor="#12161f",
+            activebackground=ACCENT,
+            highlightthickness=0,
+            bd=0,
+            width=16,
+        )
+        rounds_canvas.configure(yscrollcommand=rounds_scroll.set)
+        rounds_canvas.grid(row=0, column=0, sticky="nsew")
+        rounds_scroll.grid(row=0, column=1, sticky="ns")
+
+        rounds_box = tk.Frame(rounds_canvas, bg=PANEL)
+        rounds_win = rounds_canvas.create_window((0, 0), window=rounds_box, anchor="nw")
+
+        def _sync_scroll_region(_event=None):
+            rounds_canvas.configure(scrollregion=rounds_canvas.bbox("all") or (0, 0, 0, 0))
+
+        def _sync_inner_width(event):
+            rounds_canvas.itemconfigure(rounds_win, width=event.width)
+            _sync_scroll_region()
+
+        rounds_box.bind("<Configure>", _sync_scroll_region)
+        rounds_canvas.bind("<Configure>", _sync_inner_width)
+
+        def _wheel_units(event):
+            if getattr(event, "delta", 0):
+                return int(-event.delta / 120)
+            if getattr(event, "num", None) == 4:
+                return -1
+            if getattr(event, "num", None) == 5:
+                return 1
+            return 0
+
+        def _on_mousewheel(event):
+            steps = _wheel_units(event)
+            if steps:
+                rounds_canvas.yview_scroll(steps, "units")
+            return "break"
+
+        def _bind_wheel(_event=None):
+            rounds_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            rounds_canvas.bind_all("<Button-4>", _on_mousewheel)
+            rounds_canvas.bind_all("<Button-5>", _on_mousewheel)
+
+        def _unbind_wheel(_event=None):
+            rounds_canvas.unbind_all("<MouseWheel>")
+            rounds_canvas.unbind_all("<Button-4>")
+            rounds_canvas.unbind_all("<Button-5>")
+
+        scroll_host.bind("<Enter>", _bind_wheel)
+        scroll_host.bind("<Leave>", _unbind_wheel)
+
+        self._rounds_canvas = rounds_canvas
+        self._rounds_inner = rounds_box
+
         for i in range(NUM_STUDY_ROUNDS):
             self._study_round_row(
                 rounds_box,
@@ -758,6 +823,29 @@ class ProcedureGUI:
         self._active_round = round_index
         self._status_display.set(f"Round {round_index} — Incubating")
         self._refresh_round_highlight()
+        self._scroll_round_into_view(round_index)
+
+    def _scroll_round_into_view(self, round_index):
+        canvas = getattr(self, "_rounds_canvas", None)
+        frames = self._round_row_frames
+        if canvas is None or not frames:
+            return
+        idx = max(0, min(len(frames) - 1, int(round_index) - 1))
+        frame = frames[idx]
+        canvas.update_idletasks()
+        bbox = canvas.bbox("all")
+        if not bbox:
+            return
+        total = max(1, bbox[3])
+        view_h = max(1, canvas.winfo_height())
+        y = frame.winfo_y()
+        h = frame.winfo_height()
+        top = canvas.canvasy(0)
+        bottom = top + view_h
+        if y < top:
+            canvas.yview_moveto(y / total)
+        elif y + h > bottom:
+            canvas.yview_moveto(max(0.0, (y + h - view_h) / total))
 
     def _clear_round_highlight(self):
         self._active_round = 0
@@ -988,7 +1076,11 @@ class ProcedureGUI:
         n = max(1, min(MAX_PETRI_DISHES, int(self._petri_count.get())))
         self._log_msg(f"Take Pictures: {n} petri dish(es)")
         step_05_prepare_imaging()
-        exp = capture_petri_dishes(n)
+        exp = capture_petri_dishes(
+            n,
+            on_tick=self._incubation_tick,
+            on_log=self._log_msg,
+        )
         step_05_post_imaging_cleanup()
         self._log_msg(f"Saved: {exp}")
 

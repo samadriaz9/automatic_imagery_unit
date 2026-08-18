@@ -6,6 +6,9 @@ import os
 import time
 
 from device_config import (
+    CAMERA_DISCONNECT_MAX_RECOVERIES,
+    CAMERA_DISCONNECT_RECOVERY_MIN,
+    CAMERA_DISCONNECT_RECOVERY_TEMP_C,
     CAMERA_DISH_PRE_UP,
     CAMERA_DISH_PRE_UP_ROW2,
     CAMERA_STEPSIZE,
@@ -27,15 +30,15 @@ from device_config import (
     PETRI_STEPSIZE,
     PETRI_TRAY_COLS,
 )
-from camera_module import Camera_home, Camera_up
+from camera_module import Camera_down, Camera_home, Camera_up
 from incubator_lid import incubator_lid_down, incubator_lid_home
 from incubation_module import (
     Start_incubation,
     UPPER_HEATER_PIN,
     release_incubation_heaters,
 )
-from imaging import _next_exp_dir, data_root, start_multi_petri_imaging
-from petri_dishes import petri_dishes_home, petri_dishes_up
+from imaging import CameraDisconnectError, _next_exp_dir, data_root, start_multi_petri_imaging
+from petri_dishes import petri_dishes_down, petri_dishes_home, petri_dishes_up
 
 
 def step_01_all_home():
@@ -124,17 +127,64 @@ def _run_multi_petri_capture(num, capture_root, first_dish, last_dish):
     )
 
 
+def _log_msg(msg, on_log=None):
+    print(msg)
+    if on_log:
+        on_log(msg)
+
+
+def _prepare_imaging_for_dish(dish):
+    """Home and move to the start position of a 1-based dish (after recovery)."""
+    dish = max(1, int(dish))
+    petri_off = PETRI_STEPSIZE * 7
+    cam_off = CAMERA_STEPSIZE
+    if dish <= DISHES_PER_TRAY_ROW:
+        step_05_prepare_imaging()
+        skips = dish - 1
+    else:
+        step_05_prepare_imaging_row2()
+        skips = dish - DISHES_PER_TRAY_ROW - 1
+    for _ in range(skips):
+        if petri_off > 0:
+            petri_dishes_down(petri_off)
+        if cam_off > 0:
+            Camera_down(cam_off)
+
+
+def _recover_from_camera_disconnect(on_tick=None, on_log=None):
+    """Park at incubation pose, hold 5 min, so imaging can be retried from home."""
+    _log_msg(
+        "[Recovery] Camera disconnected during imaging — returning all home",
+        on_log,
+    )
+    step_01_all_home()
+    _log_msg(
+        f"[Recovery] Incubation {CAMERA_DISCONNECT_RECOVERY_TEMP_C:g}°C "
+        f"for {CAMERA_DISCONNECT_RECOVERY_MIN:g} min, then retry",
+        on_log,
+    )
+    Start_incubation(
+        CAMERA_DISCONNECT_RECOVERY_TEMP_C,
+        CAMERA_DISCONNECT_RECOVERY_MIN,
+        on_tick=on_tick,
+    )
+
+
 def capture_petri_dishes(
     num_petri_dishes,
     experiment_dir=None,
     time_point_subdir=None,
     on_tick=None,
+    on_log=None,
 ):
     """
     Power on camera if needed, run multi-petri capture, power off camera.
 
     With 10 dishes: row 1 (dishes 1–5) → all home → 4 min upper-only incubation
     at 37 °C → row 2 (dishes 6–10). All images go to the same experiment folder.
+
+    If the USB camera disconnects mid-capture: all home, incubate 5 min at 37 °C,
+    then retry from the dish that failed.
 
     Returns experiment directory path used for captures.
     """
@@ -148,37 +198,69 @@ def capture_petri_dishes(
         capture_root = os.path.join(experiment_dir, str(time_point_subdir))
         os.makedirs(capture_root, exist_ok=True)
 
-    ready, _relay_used = ensure_usb_camera_ready(device_index=0)
-    if not ready:
-        raise RuntimeError("USB camera not available")
-
     split_rows = num == MAX_PETRI_DISHES and num == DISHES_PER_TRAY_ROW * 2
+    row1_end = DISHES_PER_TRAY_ROW
+    row2_start = DISHES_PER_TRAY_ROW + 1
+    recoveries = 0
+    resume_dish = 1
+
+    def _capture_from(start_dish):
+        if split_rows:
+            if start_dish <= row1_end:
+                print(
+                    f"[Imaging] Split capture: row 1 (dishes {start_dish}-{row1_end}), "
+                    f"mid incubation, row 2 (dishes {row2_start}-{num})"
+                )
+                _run_multi_petri_capture(num, capture_root, start_dish, row1_end)
+                print("[Imaging] Row 1 complete — all home before mid-row incubation")
+                step_01_all_home()
+                print(
+                    f"[Imaging] Mid-row incubation: {MID_ROW_IMAGING_TEMP_C:g}°C "
+                    f"for {MID_ROW_IMAGING_MIN:g} min (upper heater only)"
+                )
+                Start_incubation(
+                    MID_ROW_IMAGING_TEMP_C,
+                    MID_ROW_IMAGING_MIN,
+                    on_tick=on_tick,
+                    heater_pins=(UPPER_HEATER_PIN,),
+                )
+                step_05_prepare_imaging_row2()
+                _run_multi_petri_capture(num, capture_root, row2_start, num)
+            else:
+                _run_multi_petri_capture(num, capture_root, start_dish, num)
+        else:
+            _run_multi_petri_capture(num, capture_root, start_dish, num)
 
     try:
-        if split_rows:
-            row1_end = DISHES_PER_TRAY_ROW
-            row2_start = DISHES_PER_TRAY_ROW + 1
-            print(
-                f"[Imaging] Split capture: row 1 (dishes 1-{row1_end}), "
-                f"mid incubation, row 2 (dishes {row2_start}-{num})"
-            )
-            _run_multi_petri_capture(num, capture_root, 1, row1_end)
-            print("[Imaging] Row 1 complete — all home before mid-row incubation")
-            step_01_all_home()
-            print(
-                f"[Imaging] Mid-row incubation: {MID_ROW_IMAGING_TEMP_C:g}°C "
-                f"for {MID_ROW_IMAGING_MIN:g} min (upper heater only)"
-            )
-            Start_incubation(
-                MID_ROW_IMAGING_TEMP_C,
-                MID_ROW_IMAGING_MIN,
-                on_tick=on_tick,
-                heater_pins=(UPPER_HEATER_PIN,),
-            )
-            step_05_prepare_imaging_row2()
-            _run_multi_petri_capture(num, capture_root, row2_start, num)
-        else:
-            _run_multi_petri_capture(num, capture_root, 1, num)
+        while True:
+            try:
+                if recoveries > 0:
+                    _log_msg(
+                        f"[Recovery] Repositioning to petri dish {resume_dish} and retrying",
+                        on_log,
+                    )
+                    _prepare_imaging_for_dish(resume_dish)
+                ready, _relay_used = ensure_usb_camera_ready(device_index=0)
+                if not ready:
+                    raise CameraDisconnectError("USB camera not available")
+                _capture_from(resume_dish)
+                break
+            except CameraDisconnectError as exc:
+                recoveries += 1
+                failed = int(exc.dish) if getattr(exc, "dish", None) else resume_dish
+                if recoveries > CAMERA_DISCONNECT_MAX_RECOVERIES:
+                    raise RuntimeError(
+                        f"USB camera still disconnected after "
+                        f"{CAMERA_DISCONNECT_MAX_RECOVERIES} recoveries "
+                        f"(last dish {failed}): {exc}"
+                    ) from exc
+                _log_msg(
+                    f"[Recovery] Disconnect at dish {failed} "
+                    f"({recoveries}/{CAMERA_DISCONNECT_MAX_RECOVERIES}): {exc}",
+                    on_log,
+                )
+                _recover_from_camera_disconnect(on_tick=on_tick, on_log=on_log)
+                resume_dish = failed
     finally:
         power_off_usb_camera()
 
@@ -198,16 +280,16 @@ def run_timed_picture_study(
 
     Folders: ``data/exp_XX/03min/``, ``data/exp_XX/06min/`` (cumulative minutes).
 
-    ``interval_minutes``: length-6 list of minutes per round (first ``num_rounds`` used).
+    ``interval_minutes``: minutes per round (first ``num_rounds`` used, max ``NUM_STUDY_ROUNDS``).
 
     Returns parent experiment directory.
     """
     if target_c is None:
         target_c = DEFAULT_ROUND_TEMPS[0]
 
-    num_rounds = max(1, min(6, int(num_rounds)))
-    intervals = list(interval_minutes)[:6]
-    while len(intervals) < 6:
+    num_rounds = max(1, min(NUM_STUDY_ROUNDS, int(num_rounds)))
+    intervals = list(interval_minutes)[:NUM_STUDY_ROUNDS]
+    while len(intervals) < NUM_STUDY_ROUNDS:
         intervals.append(intervals[-1] if intervals else 3)
 
     exp_dir = _next_exp_dir(data_root())
@@ -231,6 +313,8 @@ def run_timed_picture_study(
             num_petri_dishes,
             experiment_dir=exp_dir,
             time_point_subdir=label,
+            on_tick=on_tick,
+            on_log=on_log,
         )
 
     step_05_post_imaging_cleanup()
@@ -305,6 +389,7 @@ def run_incubation_imaging_study(
                 experiment_dir=exp_dir,
                 time_point_subdir=subdir,
                 on_tick=on_tick,
+                on_log=on_log,
             )
             release_incubation_heaters()
 
