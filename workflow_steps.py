@@ -43,8 +43,8 @@ def step_01_all_home():
     Camera_home()
     incubator_lid_home()
     petri_dishes_home()
-    petri_dishes_up(2400)
-    incubator_lid_down(550)
+    petri_dishes_up(2370)
+    incubator_lid_down(650)
 
 
 def step_02_insert_petri_dishes():
