@@ -12,6 +12,9 @@ LOWER_HEATER_PIN = 12  # BCM 12, physical pin 32
 UPPER_HEATER_PIN = 26  # BCM 26, physical pin 37
 UPPER_HEATER_DUTY_BOOST = 1.30  # upper runs 30% hotter than lower (same PID base)
 LOWER_HEATER_OFF_REMAINING_MIN = 4.0  # last N min: lower off, upper only until incubation ends
+# Once sample is this many °C below target, lower stays off (upper finishes ramp / hold).
+# Example: target 37 °C → lower off from 32 °C onward to reduce lid vapour.
+LOWER_HEATER_OFF_BELOW_TARGET_C = 5.0
 HEATER_DUTY_SCALE = {
     LOWER_HEATER_PIN: 1.0,
     UPPER_HEATER_PIN: UPPER_HEATER_DUTY_BOOST,
@@ -151,6 +154,7 @@ def Start_incubation(
     ramp_step=2.0,
     ramp_delay=0.1,
     lower_off_remaining_min=None,
+    lower_off_below_target_c=None,
     keep_upper_heater_on_exit=False,
 ):
     """
@@ -158,8 +162,11 @@ def Start_incubation(
 
     Both heaters use the same DS18B20 reading and PID output. The upper heater
     (GPIO 26 / pin 37) receives 30% more duty than the lower (GPIO 12 / pin 32).
-    In the last ``lower_off_remaining_min`` minutes, the lower heater turns off
-    and only the upper heater runs until incubation ends.
+
+    Lower heater is switched off (upper only) when either:
+    - temperature reaches ``target - lower_off_below_target_c`` (default 5 °C),
+      then stays off for the rest of this incubation to reduce lid vapour; or
+    - the last ``lower_off_remaining_min`` minutes of the hold.
 
     If ``keep_upper_heater_on_exit`` is True, the upper heater stays on at the
     last PID duty after incubation (for imaging). Call ``release_incubation_heaters()``
@@ -177,6 +184,8 @@ def Start_incubation(
         ramp_step/ramp_delay: soft-ramp behavior to reduce thermal overshoot.
         poll_seconds: sensor polling interval.
         lower_off_remaining_min: minutes before end to disable lower heater (default 4).
+        lower_off_below_target_c: turn lower off once temp >= target minus this
+            (default 5). Set 0 or less to disable the temperature cutoff.
         keep_upper_heater_on_exit: keep upper heater PWM on after incubation ends.
         on_tick: optional callback(elapsed_s, remaining_s, temp_c, target_temp_c).
     """
@@ -189,6 +198,11 @@ def Start_incubation(
     if lower_off_remaining_min is None:
         lower_off_remaining_min = LOWER_HEATER_OFF_REMAINING_MIN
     lower_off_remaining_s = max(0.0, float(lower_off_remaining_min) * 60.0)
+    if lower_off_below_target_c is None:
+        lower_off_below_target_c = LOWER_HEATER_OFF_BELOW_TARGET_C
+    lower_off_below_target_c = float(lower_off_below_target_c)
+    use_temp_cutoff = lower_off_below_target_c > 0
+    lower_off_threshold_c = target_temp_c - lower_off_below_target_c
 
     if heater_pins is None:
         heater_pins = (int(pwm_pin),) if pwm_pin is not None else DEFAULT_HEATER_PINS
@@ -206,10 +220,16 @@ def Start_incubation(
     scale_desc = ", ".join(
         f"GPIO{p}×{scale_map.get(p, 1.0):g}" for p in heater_pins
     )
+    cutoff_desc = (
+        f"lower off at temp>={lower_off_threshold_c:.1f}C "
+        f"(target-{lower_off_below_target_c:g}) or <= {lower_off_remaining_min:g} min remain"
+        if use_temp_cutoff
+        else f"lower off when <= {lower_off_remaining_min:g} min remain"
+    )
     print(
         f"[Incubation] Heater PWM pins={heater_pins}, duty scale: {scale_desc}, "
         f"freq={int(pwm_freq)}Hz, PID(Kp={kp}, Ki={ki}, Kd={kd}), max_duty={max_duty:.1f}%, "
-        f"lower off when <= {lower_off_remaining_min:g} min remain"
+        f"{cutoff_desc}"
     )
 
     heater_channels = _start_heater_channels(heater_pins, pwm_freq, scale_map)
@@ -219,6 +239,7 @@ def Start_incubation(
     prev_error = 0.0
     current_duty = 0.0
     lower_cutoff_logged = False
+    lower_off_near_target = False
     if PID is not None:
         pid = PID(float(kp), float(ki), float(kd), setpoint=target_temp_c)
         pid.output_limits = (0.0, max_duty)
@@ -250,8 +271,20 @@ def Start_incubation(
             temp_c = _read_ds18b20_c()
             remaining = max(0.0, duration_s - (time.time() - start))
             use_lower_cutoff = duration_s > lower_off_remaining_s
-            lower_active = remaining > lower_off_remaining_s if use_lower_cutoff else True
-            if not lower_active and not lower_cutoff_logged:
+            lower_active_time = remaining > lower_off_remaining_s if use_lower_cutoff else True
+            if use_temp_cutoff and (lower_off_near_target or temp_c >= lower_off_threshold_c):
+                if not lower_off_near_target:
+                    print(
+                        f"[Incubation] {temp_c:.2f}C >= {lower_off_threshold_c:.2f}C "
+                        f"(target {target_temp_c:.1f}C - {lower_off_below_target_c:g}) — "
+                        "lower heater OFF, upper only to reduce lid vapour"
+                    )
+                    lower_off_near_target = True
+                lower_active_temp = False
+            else:
+                lower_active_temp = True
+            lower_active = lower_active_time and lower_active_temp
+            if not lower_active_time and not lower_cutoff_logged:
                 print(
                     f"[Incubation] <= {lower_off_remaining_min:g} min remaining — "
                     "lower heater OFF, upper only until incubation ends"
