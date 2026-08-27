@@ -429,7 +429,7 @@ def shutdown_all():
     try:
         from incubation_module import release_incubation_heaters
 
-        release_incubation_heaters()
+        release_incubation_heaters(destroy=True)
     except Exception as e:
         print(f"  Cleanup warning (incubation heaters): {e}")
 

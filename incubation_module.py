@@ -1,4 +1,5 @@
 import glob
+import os
 import time
 import RPi.GPIO as GPIO
 
@@ -24,46 +25,75 @@ DEFAULT_HEATER_PINS = (LOWER_HEATER_PIN, UPPER_HEATER_PIN)
 RPWM_PIN = LOWER_HEATER_PIN
 
 _held_upper_channels = []
+# Reuse PWM objects across rounds. Recreating RPi.GPIO.PWM after pwm.stop()
+# glitches nearby GPIO and often drops the DS18B20 1-Wire slave until restart.
+_pwm_by_pin = {}
+_cached_ds18b20_path = None
+DS18B20_READ_RETRIES = 8
+DS18B20_RETRY_DELAY_S = 0.25
+DS18B20_MAX_CONSECUTIVE_FAILS = 5
 
 
-def _stop_channel(ch):
+def _stop_channel(ch, destroy=False):
     try:
         ch["pwm"].ChangeDutyCycle(0)
-        ch["pwm"].stop()
+        ch["duty"] = 0.0
+        if destroy:
+            ch["pwm"].stop()
     except Exception:
         pass
+    if destroy:
+        _pwm_by_pin.pop(ch.get("pin"), None)
 
 
-def release_incubation_heaters():
-    """Turn off any upper heater left running after incubation (e.g. between study rounds)."""
+def release_incubation_heaters(destroy=False):
+    """Turn off heaters. Keep PWM objects unless destroy=True (process shutdown)."""
     global _held_upper_channels
-    if not _held_upper_channels:
+    channels = list(_pwm_by_pin.values())
+    if not channels and not _held_upper_channels:
         return
-    for ch in list(_held_upper_channels):
-        _stop_channel(ch)
+    for ch in channels:
+        _stop_channel(ch, destroy=destroy)
     _held_upper_channels = []
-    print("[Incubation] Held upper heater OFF.")
+    if destroy:
+        print("[Incubation] Heaters PWM stopped.")
+    else:
+        print("[Incubation] Heaters OFF (PWM kept for next round).")
 
 
-def _stop_heater_channels(channels, pins_to_stop=None):
+def _stop_heater_channels(channels, pins_to_stop=None, destroy=False):
     stop_pins = pins_to_stop
     if stop_pins is None:
         stop_pins = {ch["pin"] for ch in channels}
     for ch in channels:
         if ch["pin"] in stop_pins:
-            _stop_channel(ch)
+            _stop_channel(ch, destroy=destroy)
 
 
-def _read_ds18b20_c(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
-    """
-    Read DS18B20 temperature in Celsius from w1 sysfs.
-    Raises RuntimeError if sensor file is missing or CRC/data invalid.
-    """
-    paths = glob.glob(sensor_glob)
+def _trigger_w1_search():
+    """Ask the kernel 1-Wire master to rescan; DS18B20 can drop after PWM/motor/USB noise."""
+    for path in glob.glob("/sys/bus/w1/devices/w1_bus_master*/w1_master_search"):
+        try:
+            with open(path, "w", encoding="ascii") as f:
+                f.write("1\n")
+        except OSError:
+            pass
+
+
+def _resolve_ds18b20_path(sensor_glob):
+    global _cached_ds18b20_path
+    if _cached_ds18b20_path and os.path.exists(_cached_ds18b20_path):
+        return _cached_ds18b20_path
+    paths = sorted(glob.glob(sensor_glob))
     if not paths:
-        raise RuntimeError("DS18B20 not found under /sys/bus/w1/devices/28-*/w1_slave")
+        _cached_ds18b20_path = None
+        return None
+    _cached_ds18b20_path = paths[0]
+    return _cached_ds18b20_path
 
-    with open(paths[0], "r", encoding="utf-8") as f:
+
+def _read_ds18b20_once(path):
+    with open(path, "r", encoding="utf-8") as f:
         lines = f.read().strip().splitlines()
 
     if len(lines) < 2 or not lines[0].strip().endswith("YES"):
@@ -75,6 +105,65 @@ def _read_ds18b20_c(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
 
     milli_c = int(lines[1].split(marker, 1)[1])
     return milli_c / 1000.0
+
+
+def _read_ds18b20_c(
+    sensor_glob="/sys/bus/w1/devices/28-*/w1_slave",
+    retries=DS18B20_READ_RETRIES,
+    retry_delay=DS18B20_RETRY_DELAY_S,
+):
+    """
+    Read DS18B20 temperature in Celsius from w1 sysfs.
+    Retries CRC misses and a vanished sysfs node (common after imaging / PWM restart).
+    Raises RuntimeError if the sensor is still missing or invalid after retries.
+    """
+    global _cached_ds18b20_path
+    last_err = None
+    searched = False
+    attempts = max(1, int(retries))
+    for attempt in range(attempts):
+        path = _resolve_ds18b20_path(sensor_glob)
+        if not path:
+            last_err = RuntimeError(
+                "DS18B20 not found under /sys/bus/w1/devices/28-*/w1_slave"
+            )
+            if not searched:
+                print("[Incubation] DS18B20 missing — triggering 1-Wire bus search")
+                _trigger_w1_search()
+                searched = True
+                _cached_ds18b20_path = None
+            time.sleep(float(retry_delay))
+            continue
+        try:
+            return _read_ds18b20_once(path)
+        except (OSError, RuntimeError, ValueError) as exc:
+            last_err = exc
+            if isinstance(exc, OSError):
+                _cached_ds18b20_path = None
+                if not searched:
+                    print("[Incubation] DS18B20 sysfs error — triggering 1-Wire bus search")
+                    _trigger_w1_search()
+                    searched = True
+            if attempt + 1 < attempts:
+                time.sleep(float(retry_delay))
+    raise RuntimeError(
+        f"DS18B20 read failed after {attempts} tries: {last_err}"
+    ) from last_err
+
+
+def _ensure_ds18b20_ready(sensor_glob="/sys/bus/w1/devices/28-*/w1_slave"):
+    """Rescan 1-Wire if the slave vanished after imaging / heater PWM."""
+    global _cached_ds18b20_path
+    if _resolve_ds18b20_path(sensor_glob):
+        return
+    print("[Incubation] DS18B20 not on bus — searching 1-Wire (can happen after imaging)")
+    _cached_ds18b20_path = None
+    _trigger_w1_search()
+    for _ in range(12):
+        time.sleep(0.5)
+        if _resolve_ds18b20_path(sensor_glob):
+            print(f"[Incubation] DS18B20 restored: {_cached_ds18b20_path}")
+            return
 
 
 def _apply_heater_duties(channels, base, max_duty, lower_active=True):
@@ -112,21 +201,33 @@ def _set_heaters_duty_smooth(
 
 def _start_heater_channels(heater_pins, pwm_freq, duty_scale=None):
     duty_scale = duty_scale or HEATER_DUTY_SCALE
+    GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
     channels = []
+    created = False
     for pin in heater_pins:
         pin = int(pin)
+        scale = float(duty_scale.get(pin, 1.0))
+        existing = _pwm_by_pin.get(pin)
+        if existing is not None:
+            existing["scale"] = scale
+            channels.append(existing)
+            continue
         GPIO.setup(pin, GPIO.OUT)
         pwm = GPIO.PWM(pin, int(pwm_freq))
         pwm.start(0)
-        channels.append(
-            {
-                "pin": pin,
-                "pwm": pwm,
-                "scale": float(duty_scale.get(pin, 1.0)),
-                "duty": 0.0,
-            }
-        )
+        ch = {
+            "pin": pin,
+            "pwm": pwm,
+            "scale": scale,
+            "duty": 0.0,
+        }
+        _pwm_by_pin[pin] = ch
+        channels.append(ch)
+        created = True
+    if created:
+        # Let 1-Wire recover after GPIO PWM is first attached.
+        time.sleep(0.3)
     return channels
 
 
@@ -190,7 +291,8 @@ def Start_incubation(
         on_tick: optional callback(elapsed_s, remaining_s, temp_c, target_temp_c).
     """
     global _held_upper_channels
-    release_incubation_heaters()
+    # Zero duty only — do not pwm.stop(); recreating PWM drops DS18B20 on later rounds.
+    release_incubation_heaters(destroy=False)
     target_temp_c = float(target_temp_c)
     duration_s = max(0.0, float(duration_minutes) * 60.0)
     poll_seconds = max(0.2, float(poll_seconds))
@@ -233,6 +335,7 @@ def Start_incubation(
     )
 
     heater_channels = _start_heater_channels(heater_pins, pwm_freq, scale_map)
+    _ensure_ds18b20_ready()
 
     pid = None
     i_term = 0.0
@@ -260,15 +363,40 @@ def Start_incubation(
         except Exception:
             pass
 
+    last_temp = None
+    consecutive_fails = 0
+
+    def _read_temp_or_hold():
+        nonlocal last_temp, consecutive_fails
+        try:
+            temp_c = _read_ds18b20_c(
+                retries=DS18B20_READ_RETRIES if last_temp is None else 3
+            )
+            if consecutive_fails:
+                print(
+                    f"[Incubation] DS18B20 recovered after {consecutive_fails} "
+                    f"failed read(s): {temp_c:.2f}C"
+                )
+            consecutive_fails = 0
+            last_temp = temp_c
+            return temp_c
+        except RuntimeError as exc:
+            consecutive_fails += 1
+            print(f"[Incubation] Sensor read failed ({consecutive_fails}): {exc}")
+            if last_temp is None or consecutive_fails >= DS18B20_MAX_CONSECUTIVE_FAILS:
+                raise
+            print(f"[Incubation] Holding last good reading {last_temp:.2f}C")
+            return last_temp
+
     try:
         try:
-            _notify_tick(_read_ds18b20_c())
+            _notify_tick(_read_temp_or_hold())
         except RuntimeError as exc:
             print(f"[Incubation] Initial sensor read failed: {exc}")
             _notify_tick(float("nan"))
 
         while (time.time() - start) < duration_s:
-            temp_c = _read_ds18b20_c()
+            temp_c = _read_temp_or_hold()
             remaining = max(0.0, duration_s - (time.time() - start))
             use_lower_cutoff = duration_s > lower_off_remaining_s
             lower_active_time = remaining > lower_off_remaining_s if use_lower_cutoff else True
