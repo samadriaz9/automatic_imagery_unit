@@ -31,7 +31,7 @@ INCUBATION_MIN_MIN = 0.5
 INCUBATION_MIN_MAX = 600.0
 INCUBATION_HOUR_STEP = 0.25
 
-# USB capture: short settle + flush; exposure is matched later in software
+# USB capture: short settle + flush a stale frame
 CAPTURE_SETTLE_SECONDS = 0.2
 CAPTURE_FRAME_COUNT = 2
 CAPTURE_DISCARD_FRAMES = 1  # of the 2 frames; save the last one
