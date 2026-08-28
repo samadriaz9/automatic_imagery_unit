@@ -31,11 +31,11 @@ INCUBATION_MIN_MIN = 0.5
 INCUBATION_MIN_MAX = 600.0
 INCUBATION_HOUR_STEP = 0.25
 
-# USB capture: wait after each move so auto-exposure / white-balance can settle
-CAPTURE_SETTLE_SECONDS = 2.5
-CAPTURE_FRAME_COUNT = 5
-CAPTURE_DISCARD_FRAMES = 3  # of the 5 frames; save the last one
-MOTION_SETTLE_SECONDS = 0.15  # short pause after motors (vibration)
+# USB capture: short settle + flush; exposure is matched later in software
+CAPTURE_SETTLE_SECONDS = 0.2
+CAPTURE_FRAME_COUNT = 2
+CAPTURE_DISCARD_FRAMES = 1  # of the 2 frames; save the last one
+MOTION_SETTLE_SECONDS = 0.08  # short pause after motors (vibration)
 
 # Split imaging (10 dishes): row-1 capture → home → mid incubation → row-2 capture
 MID_ROW_IMAGING_TEMP_C = 37.0

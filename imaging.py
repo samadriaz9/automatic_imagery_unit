@@ -121,11 +121,9 @@ def _capture_frame(
     square_crop=False,
 ):
     """
-    After the stage has stopped: wait, grab several frames, save the last one.
+    After the stage has stopped: short settle, flush a stale frame, save the last.
 
-    USB auto-exposure and white-balance need a couple of seconds on the new
-    scene. Early buffered frames are often too bright or too dark, so the first
-    ``discard_frames`` of ``capture_frames`` are thrown away.
+    Brightness between tiles is matched later in Lab when the mosaic is built.
     """
     capture_frames = max(1, int(capture_frames))
     discard_frames = min(max(0, int(discard_frames)), capture_frames - 1)
@@ -144,7 +142,7 @@ def _capture_frame(
                     raise RuntimeError("USB camera frame read failed")
                 if i >= discard_frames:
                     last_frame = frame
-                time.sleep(0.08)
+                time.sleep(0.02)
 
             if last_frame is None:
                 raise RuntimeError("USB camera produced no usable frame")
@@ -187,6 +185,101 @@ def _crop_center_fraction(img, fraction):
     return img[y0 : y0 + nh, x0 : x0 + nw]
 
 
+def _luma_plane(bgr):
+    """Perceptual brightness (Lab L), independent of media / colony hue."""
+    if bgr.ndim == 2 or bgr.shape[2] == 1:
+        gray = bgr.astype(np.float32)
+        return gray[..., 0] if gray.ndim == 3 else gray
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+    return lab[..., 0].astype(np.float32)
+
+
+def _background_luma(bgr):
+    """
+    Dominant brightness of a tile = agar/media, not colonies.
+
+    Colonies of any color are outliers in the L histogram; the media (any of the
+    7 colors) is the large peak. No reference image is used.
+    """
+    L = _luma_plane(bgr)
+    sample = L[::3, ::3].ravel()
+    sample = sample[(sample > 5.0) & (sample < 250.0)]
+    if sample.size < 64:
+        sample = L.ravel()
+    hist, edges = np.histogram(sample, bins=40, range=(5.0, 250.0))
+    hist = np.convolve(hist.astype(np.float64), np.array([1.0, 2.0, 1.0]), mode="same")
+    peak = int(np.argmax(hist))
+    return float(0.5 * (edges[peak] + edges[peak + 1]))
+
+
+def _apply_exposure_gain(bgr, gain):
+    """Multiply RGB equally so hue of media and colonies is unchanged."""
+    gain = float(gain)
+    if abs(gain - 1.0) < 1e-4:
+        return bgr
+    out = bgr.astype(np.float32) * gain
+    return np.clip(out, 0, 255).astype(bgr.dtype)
+
+
+def _mid_tile_coords(rows, cols):
+    """
+    Center tiles used as the exposure reference (corners are matched to these).
+
+    On the default 8×8 grid this is 19, 20, 21, 27, 28, 29 (rows 3–4, cols 3–5).
+    """
+    rows = max(1, int(rows))
+    cols = max(1, int(cols))
+    n_mid_rows = 2 if rows >= 4 else max(1, rows)
+    n_mid_cols = 3 if cols >= 5 else max(1, min(3, cols))
+    r0 = max(0, rows // 2 - n_mid_rows)
+    if r0 + n_mid_rows > rows:
+        r0 = max(0, rows - n_mid_rows)
+    c0 = max(0, (cols - n_mid_cols) // 2)
+    if c0 + n_mid_cols > cols:
+        c0 = max(0, cols - n_mid_cols)
+    return [
+        (r, c)
+        for r in range(r0, r0 + n_mid_rows)
+        for c in range(c0, c0 + n_mid_cols)
+    ]
+
+
+def _equalize_tile_exposures(tiles, rows, cols, gain_min=0.70, gain_max=1.45):
+    """
+    Match every tile to the average media brightness of the mid tiles.
+
+    Corner auto-exposure error is corrected against the stable center of this
+    dish — not a global reference image — so media and colony colors stay.
+    """
+    if not tiles:
+        return tiles, [], []
+    rows = max(1, int(rows))
+    cols = max(1, int(cols))
+    n = len(tiles)
+    coords = _mid_tile_coords(rows, cols)
+    ref_idx = []
+    ref_luma = []
+    for r, c in coords:
+        i = r * cols + c
+        if 0 <= i < n:
+            ref_idx.append(i)
+            ref_luma.append(_background_luma(tiles[i]))
+    if not ref_luma:
+        ref_idx = list(range(n))
+        ref_luma = [_background_luma(t) for t in tiles]
+    target = float(np.mean(ref_luma))
+    if target < 1e-3:
+        return tiles, [1.0] * n, [i + 1 for i in ref_idx]
+    matched = []
+    gains = []
+    for tile in tiles:
+        luma = _background_luma(tile)
+        gain = float(np.clip(target / max(float(luma), 1e-3), gain_min, gain_max))
+        gains.append(gain)
+        matched.append(_apply_exposure_gain(tile, gain))
+    return matched, gains, [i + 1 for i in ref_idx]
+
+
 def _tile_index_rowmajor(row, col, ncols):
     """1-based linear index for row-major grid (row,col 0-based)."""
     return int(row) * int(ncols) + int(col) + 1
@@ -204,6 +297,8 @@ def _build_mosaic_from_tiles(
     flip_y=False,
     axis_swap=False,
     mosaic_center_fraction=1.0,
+    equalize_exposure=True,
+    write_corrected_tiles=True,
 ):
     """Stitch a mosaic from a rectangular window of captured tiles.
 
@@ -215,6 +310,10 @@ def _build_mosaic_from_tiles(
 
     mosaic_center_fraction: if < 1, keep only the center fraction of each tile, then
         resize to the cell size (e.g. 1/3 to drop overlap when using a denser 7x7 scan).
+
+    equalize_exposure: match tiles to the average media brightness of the mid
+        block (8×8: 19–21 and 27–29). Corners get the largest correction.
+        Colors of the 7 media types and mixed colonies are preserved.
     """
     capture_rows = int(capture_rows)
     capture_cols = int(capture_cols)
@@ -232,19 +331,8 @@ def _build_mosaic_from_tiles(
             f"exceeds capture grid ({capture_rows}x{capture_cols})"
         )
 
-    first_idx = _tile_index_rowmajor(wr0, wc0, capture_cols)
-    first_path = os.path.join(output_dir, f"{first_idx}.jpg")
-    first = cv2.imread(first_path)
-    if first is None:
-        raise RuntimeError(f"Could not read first mosaic source tile: {first_path}")
-
-    tile_h, tile_w = first.shape[:2]
-    tile_shape_tail = first.shape[2:] if len(first.shape) > 2 else ()
-
-    out_rows = mosaic_cols if bool(axis_swap) else mosaic_rows
-    out_cols = mosaic_rows if bool(axis_swap) else mosaic_cols
-    mosaic = np.zeros((out_rows * tile_h, out_cols * tile_w) + tile_shape_tail, dtype=first.dtype)
-
+    loaded = []
+    paths = []
     for mr in range(mosaic_rows):
         for mc in range(mosaic_cols):
             cap_r = wr0 + mr
@@ -254,10 +342,43 @@ def _build_mosaic_from_tiles(
             tile = cv2.imread(tile_path)
             if tile is None:
                 raise RuntimeError(f"Could not read tile: {tile_path}")
+            loaded.append(tile)
+            paths.append(tile_path)
 
-            if tile.shape[0] != tile_h or tile.shape[1] != tile_w:
-                tile = cv2.resize(tile, (tile_w, tile_h), interpolation=cv2.INTER_AREA)
+    first = loaded[0]
+    tile_h, tile_w = first.shape[:2]
+    sized = []
+    for tile in loaded:
+        if tile.shape[0] != tile_h or tile.shape[1] != tile_w:
+            tile = cv2.resize(tile, (tile_w, tile_h), interpolation=cv2.INTER_AREA)
+        sized.append(tile)
 
+    if bool(equalize_exposure) and len(sized) > 1:
+        sized, gains, ref_nums = _equalize_tile_exposures(
+            sized, mosaic_rows, mosaic_cols
+        )
+        gmin, gmax = min(gains), max(gains)
+        ref_txt = ",".join(str(n) for n in ref_nums)
+        print(
+            f"[Imaging] Exposure match to mid tiles [{ref_txt}]: "
+            f"gain {gmin:.2f}–{gmax:.2f} on {len(sized)} tiles"
+        )
+        if bool(write_corrected_tiles):
+            for path, tile in zip(paths, sized):
+                if not cv2.imwrite(path, tile):
+                    print(f"[Imaging] Warning: could not write corrected tile {path}")
+
+    tile_shape_tail = sized[0].shape[2:] if len(sized[0].shape) > 2 else ()
+
+    out_rows = mosaic_cols if bool(axis_swap) else mosaic_rows
+    out_cols = mosaic_rows if bool(axis_swap) else mosaic_cols
+    mosaic = np.zeros((out_rows * tile_h, out_cols * tile_w) + tile_shape_tail, dtype=sized[0].dtype)
+
+    k = 0
+    for mr in range(mosaic_rows):
+        for mc in range(mosaic_cols):
+            tile = sized[k]
+            k += 1
             tile = _crop_center_fraction(tile, mosaic_center_fraction)
             if tile.shape[0] != tile_h or tile.shape[1] != tile_w:
                 tile = cv2.resize(tile, (tile_w, tile_h), interpolation=cv2.INTER_CUBIC)
@@ -349,9 +470,10 @@ def start_imaging_capture_pattern(
     no trim. ``mosaic_center_fraction`` uses only the center fraction of each tile before placing
     (default 1.0 = full tile).
 
-    After each move the camera waits ``settle_seconds`` (default 2.5s) while the stream
-    runs, then captures ``capture_frames`` (default 5) and saves the last frame
-    (first ``discard_frames`` are discarded) so auto-exposure can settle.
+    After each move the camera waits ``settle_seconds`` (default 0.2s) and
+    keeps the last of a couple of flushed frames. Tile brightness is then
+    matched in software (exposure gain from this dish's media brightness) when
+    the mosaic is built. Media hue and colony colors are left unchanged.
 
     Returns:
         output_dir path containing captured images.
