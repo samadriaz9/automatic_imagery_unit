@@ -22,6 +22,12 @@ import numpy as np
 
 from camera_module import Camera_up, Camera_down
 from petri_dishes import petri_dishes_up
+from device_config import (
+    CAPTURE_DISCARD_FRAMES,
+    CAPTURE_FRAME_COUNT,
+    CAPTURE_SETTLE_SECONDS,
+    MOTION_SETTLE_SECONDS,
+)
 
 
 class CameraDisconnectError(RuntimeError):
@@ -60,6 +66,19 @@ def _next_exp_dir(output_root=None):
         idx += 1
 
 
+def _configure_usb_capture(cap):
+    """Request a stable 1080p stream and a short buffer of fresh frames."""
+    try:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    except Exception:
+        pass
+    try:
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    except Exception:
+        pass
+
+
 def _open_usb_capture(device_index):
     """Open the USB camera; return None if the device cannot be opened."""
     idx = int(device_index)
@@ -73,32 +92,67 @@ def _open_usb_capture(device_index):
         except Exception:
             pass
         return None
+    _configure_usb_capture(cap)
     return cap
 
 
-def _capture_frame(cap, out_path, flush_frames=4, read_retries=5, square_crop=False):
-    """Grab a fresh frame and save JPG (with retries for noisy streams)."""
-    flush_frames = max(0, int(flush_frames))
+def _pump_frames(cap, duration_s):
+    """Keep the USB stream flowing so auto-exposure / AWB can converge."""
+    duration_s = max(0.0, float(duration_s))
+    if duration_s <= 0:
+        return
+    t_end = time.time() + duration_s
+    while time.time() < t_end:
+        with contextlib.redirect_stderr(io.StringIO()):
+            cap.grab()
+        remaining = t_end - time.time()
+        if remaining <= 0:
+            break
+        time.sleep(min(0.05, remaining))
+
+
+def _capture_frame(
+    cap,
+    out_path,
+    settle_seconds=CAPTURE_SETTLE_SECONDS,
+    capture_frames=CAPTURE_FRAME_COUNT,
+    discard_frames=CAPTURE_DISCARD_FRAMES,
+    read_retries=5,
+    square_crop=False,
+):
+    """
+    After the stage has stopped: wait, grab several frames, save the last one.
+
+    USB auto-exposure and white-balance need a couple of seconds on the new
+    scene. Early buffered frames are often too bright or too dark, so the first
+    ``discard_frames`` of ``capture_frames`` are thrown away.
+    """
+    capture_frames = max(1, int(capture_frames))
+    discard_frames = min(max(0, int(discard_frames)), capture_frames - 1)
     read_retries = max(1, int(read_retries))
 
     last_err = None
     for _ in range(read_retries):
         try:
-            # Drop a few frames so we get something closer to current position.
-            for _ in range(flush_frames):
-                with contextlib.redirect_stderr(io.StringIO()):
-                    cap.grab()
-                time.sleep(0.01)
+            _pump_frames(cap, settle_seconds)
 
-            with contextlib.redirect_stderr(io.StringIO()):
-                ok, frame = cap.read()
-            if not ok or frame is None:
-                raise RuntimeError("USB camera frame read failed")
+            last_frame = None
+            for i in range(capture_frames):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    ok, frame = cap.read()
+                if not ok or frame is None:
+                    raise RuntimeError("USB camera frame read failed")
+                if i >= discard_frames:
+                    last_frame = frame
+                time.sleep(0.08)
+
+            if last_frame is None:
+                raise RuntimeError("USB camera produced no usable frame")
 
             if bool(square_crop):
-                frame = _crop_center_square(frame)
+                last_frame = _crop_center_square(last_frame)
 
-            ok_write = cv2.imwrite(out_path, frame)
+            ok_write = cv2.imwrite(out_path, last_frame)
             if not ok_write:
                 raise RuntimeError("cv2.imwrite failed")
             return
@@ -269,7 +323,9 @@ def start_imaging_capture_pattern(
     mosaic_center_fraction=1.0,
     mosaic_crop_top_px=600,
     mosaic_crop_right_px=600,
-    settle_seconds=0.15,
+    settle_seconds=CAPTURE_SETTLE_SECONDS,
+    capture_frames=CAPTURE_FRAME_COUNT,
+    discard_frames=CAPTURE_DISCARD_FRAMES,
 ):
     """
     Capture one petri dish in a matrix/raster grid pattern.
@@ -293,6 +349,10 @@ def start_imaging_capture_pattern(
     no trim. ``mosaic_center_fraction`` uses only the center fraction of each tile before placing
     (default 1.0 = full tile).
 
+    After each move the camera waits ``settle_seconds`` (default 2.5s) while the stream
+    runs, then captures ``capture_frames`` (default 5) and saves the last frame
+    (first ``discard_frames`` are discarded) so auto-exposure can settle.
+
     Returns:
         output_dir path containing captured images.
     """
@@ -312,11 +372,7 @@ def start_imaging_capture_pattern(
         )
 
     # Best-effort: request consistent resolution for decoding/saving.
-    try:
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-    except Exception:
-        pass
+    _configure_usb_capture(cap)
 
     try:
         row_step = int(petri_step_per_row)
@@ -330,7 +386,14 @@ def start_imaging_capture_pattern(
                 out_path = os.path.join(output_dir, img_name)
                 print(f"[Imaging] Capture {image_idx}/{total_tiles} (row {r + 1}, col {c + 1})")
                 try:
-                    _capture_frame(cap, out_path, square_crop=bool(square_crop))
+                    _capture_frame(
+                        cap,
+                        out_path,
+                        settle_seconds=settle_seconds,
+                        capture_frames=capture_frames,
+                        discard_frames=discard_frames,
+                        square_crop=bool(square_crop),
+                    )
                 except Exception as exc:
                     # USB stream can glitch after stepper motion; reopen once and retry.
                     print(f"[Imaging] Retry after capture error at ({r}, {c}): {exc}")
@@ -346,12 +409,14 @@ def start_imaging_capture_pattern(
                             col=c,
                         ) from exc
                     try:
-                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-                    except Exception:
-                        pass
-                    try:
-                        _capture_frame(cap, out_path, square_crop=bool(square_crop))
+                        _capture_frame(
+                            cap,
+                            out_path,
+                            settle_seconds=settle_seconds,
+                            capture_frames=capture_frames,
+                            discard_frames=discard_frames,
+                            square_crop=bool(square_crop),
+                        )
                     except Exception as exc2:
                         raise CameraDisconnectError(
                             f"USB camera disconnected at row {r + 1}, col {c + 1}: {exc2}",
@@ -359,25 +424,24 @@ def start_imaging_capture_pattern(
                             col=c,
                         ) from exc2
                 image_idx += 1
-                time.sleep(settle_seconds)
 
                 # Move camera for next column in this row (except last col).
                 if c < cols - 1:
                     Camera_down(col_step)
-                    time.sleep(settle_seconds)
+                    time.sleep(MOTION_SETTLE_SECONDS)
 
             # End-of-row reposition
             if r < rows - 1:
                 print(f"[Imaging] Next row: petri dishes UP {row_step} steps")
                 petri_dishes_up(row_step)
-                time.sleep(settle_seconds)
+                time.sleep(MOTION_SETTLE_SECONDS)
 
                 # Reset camera to column 0 for the next row (keeps square coverage).
                 if bool(camera_reset_each_row):
                     back_steps = int((cols - 1) * col_step)
                     if back_steps > 0:
                         Camera_up(back_steps)
-                    time.sleep(settle_seconds)
+                    time.sleep(MOTION_SETTLE_SECONDS)
 
         print(f"[Imaging] Capture complete: {output_dir}")
         if bool(save_mosaic):
@@ -429,7 +493,7 @@ def start_multi_petri_imaging(
     cols=8,
     camera_step_per_col=85,
     petri_step_per_row=85,
-    settle_seconds=0.15,
+    settle_seconds=CAPTURE_SETTLE_SECONDS,
     first_dish=1,
     last_dish=None,
     **capture_kwargs,
@@ -504,7 +568,7 @@ def start_multi_petri_imaging(
                 petri_dishes_home()
                 Camera_up(int(camera_pre_up_row2))
                 petri_dishes_up(int(petri_pre_up_row2))
-                time.sleep(float(settle_seconds))
+                time.sleep(MOTION_SETTLE_SECONDS)
         elif dish > first_dish:
             if dish == tc + 1:
                 print(
@@ -524,7 +588,7 @@ def start_multi_petri_imaging(
                     petri_dishes_down(petri_off)
                 if cam_off > 0:
                     Camera_down(cam_off)
-            time.sleep(float(settle_seconds))
+            time.sleep(MOTION_SETTLE_SECONDS)
 
         subdir = petri_dish_subdir(dish) if num > 1 else None
         try:
