@@ -143,7 +143,7 @@ class ProcedureGUI:
             tk.BooleanVar(value=DEFAULT_ROUND_ENABLED[i]) for i in range(NUM_STUDY_ROUNDS)
         ]
         self._round_time_hours = [
-            tk.BooleanVar(value=False) for _ in range(NUM_STUDY_ROUNDS)
+            tk.BooleanVar(value=(i >= 1)) for i in range(NUM_STUDY_ROUNDS)
         ]
         self._round_time_displays = [
             tk.StringVar(value=str(DEFAULT_ROUND_TIMES_MIN[i]))
