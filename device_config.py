@@ -16,7 +16,7 @@ MAX_PETRI_DISHES = PETRI_TRAY_ROWS * PETRI_TRAY_COLS
 
 # Steps panel — quick incubation (Start Incubation button)
 STEP_INCUBATION_TEMP_C = 37.0
-STEP_INCUBATION_MINUTES = 2.0
+STEP_INCUBATION_MINUTES = 10.0
 
 # Incubation + imaging study — up to 50 rounds (temp + time each)
 NUM_STUDY_ROUNDS = 50

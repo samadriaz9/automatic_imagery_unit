@@ -65,7 +65,7 @@ def step_03_shift_for_incubation():
 
 
 def step_04_incubation(on_tick=None):
-    """Step 4: Hold sample at 37 °C for 2 minutes."""
+    """Step 4: Hold sample at 37 °C for 10 minutes."""
     print(
         f"[Step 4] Incubation {STEP_INCUBATION_TEMP_C:g}°C "
         f"for {STEP_INCUBATION_MINUTES:g} min"
