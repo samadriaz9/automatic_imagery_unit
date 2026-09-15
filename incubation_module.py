@@ -252,7 +252,7 @@ def Start_incubation(
     kp=10.0,
     ki=0.2,
     kd=2.0,
-    max_duty=20.0,
+    max_duty=25.0,
     ramp_step=2.0,
     ramp_delay=0.1,
     lower_off_remaining_min=None,
