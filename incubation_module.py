@@ -11,8 +11,12 @@ except Exception:
 
 LOWER_HEATER_PIN = 12  # BCM 12, physical pin 32
 UPPER_HEATER_PIN = 26  # BCM 26, physical pin 37
-UPPER_HEATER_DUTY_BOOST = 1.0  # same PWM duty as lower while both are on
-LOWER_HEATER_OFF_REMAINING_MIN = 5.0  # last 5 min (before pictures): lower off, upper only
+UPPER_HEATER_DUTY_BOOST = 1.20  # upper a little faster than lower while both are on
+# Pre-imaging cool-down (only on rounds longer than 20 min):
+# at 20 min remaining → lower off, upper duty ramps down; at 10 min → both off.
+COOLDOWN_LOWER_OFF_REMAINING_MIN = 20.0
+COOLDOWN_UPPER_OFF_REMAINING_MIN = 10.0
+LOWER_HEATER_OFF_REMAINING_MIN = COOLDOWN_LOWER_OFF_REMAINING_MIN
 # Once sample is this many °C below target, lower stays off (upper finishes last degree).
 # Example: target 37 °C → both heaters until 36 °C, then upper only to 37 °C.
 LOWER_HEATER_OFF_BELOW_TARGET_C = 1.0
@@ -262,15 +266,20 @@ def Start_incubation(
     """
     Maintain incubation temperature using PID + one or more BTS PWM heater outputs.
 
-    Both heaters use the same DS18B20 reading, PID output, and PWM duty
-    (GPIO 26 upper, GPIO 12 lower) until the sample is 1 °C below target.
-    Then the lower heater stays off and only the upper finishes that last
-    degree and the hold. Lower is also off for the last 5 minutes so the
-    lid stays warmer before pictures.
+    Both heaters use the same DS18B20 reading and PID output. The upper
+    heater (GPIO 26) runs 20% more duty than the lower (GPIO 12) until the
+    sample is 1 °C below target. Then the lower heater stays off and only
+    the upper finishes that last degree and the hold.
 
-    If ``keep_upper_heater_on_exit`` is True, the upper heater stays on at the
-    last PID duty after incubation (for imaging). Call ``release_incubation_heaters()``
-    when heating should stop.
+    On rounds longer than 20 minutes, a cool-down runs before pictures:
+    at 20 minutes remaining the lower heater turns off and the upper duty
+    ramps down; at 10 minutes remaining both heaters are off so the dishes
+    can cool toward the outer temperature.
+
+    If ``keep_upper_heater_on_exit`` is True and no cool-down ran, the upper
+    heater stays on after incubation (for imaging). After a cool-down all
+    heaters stay off. Call ``release_incubation_heaters()`` when heating
+    should stop.
 
     Args:
         target_temp_c: target temperature in Celsius.
@@ -283,10 +292,12 @@ def Start_incubation(
         max_duty: safety cap per heater duty cycle (%).
         ramp_step/ramp_delay: soft-ramp behavior to reduce thermal overshoot.
         poll_seconds: sensor polling interval.
-        lower_off_remaining_min: minutes before end to disable lower heater (default 5).
+        lower_off_remaining_min: start cool-down (lower off, taper upper) this
+            many minutes before the end (default 20). Only if the round is longer.
         lower_off_below_target_c: turn lower off once temp >= target minus this
             (default 1 °C, so 36 °C when target is 37 °C). Set 0 or less to disable.
-        keep_upper_heater_on_exit: keep upper heater PWM on after incubation ends.
+        keep_upper_heater_on_exit: keep upper heater PWM on after incubation ends
+            (ignored after a cool-down).
         on_tick: optional callback(elapsed_s, remaining_s, temp_c, target_temp_c).
     """
     global _held_upper_channels
@@ -297,8 +308,14 @@ def Start_incubation(
     poll_seconds = max(0.2, float(poll_seconds))
     max_duty = max(1.0, min(100.0, float(max_duty)))
     if lower_off_remaining_min is None:
-        lower_off_remaining_min = LOWER_HEATER_OFF_REMAINING_MIN
+        lower_off_remaining_min = COOLDOWN_LOWER_OFF_REMAINING_MIN
     lower_off_remaining_s = max(0.0, float(lower_off_remaining_min) * 60.0)
+    upper_off_remaining_min = COOLDOWN_UPPER_OFF_REMAINING_MIN
+    upper_off_remaining_s = max(0.0, float(upper_off_remaining_min) * 60.0)
+    if upper_off_remaining_s > lower_off_remaining_s:
+        upper_off_remaining_s = lower_off_remaining_s
+    cooldown_span_s = max(1.0, lower_off_remaining_s - upper_off_remaining_s)
+    use_preimage_cooldown = duration_s > lower_off_remaining_s
     if lower_off_below_target_c is None:
         lower_off_below_target_c = LOWER_HEATER_OFF_BELOW_TARGET_C
     lower_off_below_target_c = float(lower_off_below_target_c)
@@ -321,12 +338,18 @@ def Start_incubation(
     scale_desc = ", ".join(
         f"GPIO{p}×{scale_map.get(p, 1.0):g}" for p in heater_pins
     )
-    cutoff_desc = (
-        f"lower off at temp>={lower_off_threshold_c:.1f}C "
-        f"(target-{lower_off_below_target_c:g}) or <= {lower_off_remaining_min:g} min remain"
-        if use_temp_cutoff
-        else f"lower off when <= {lower_off_remaining_min:g} min remain"
-    )
+    cutoff_parts = []
+    if use_temp_cutoff:
+        cutoff_parts.append(
+            f"lower off at temp>={lower_off_threshold_c:.1f}C "
+            f"(target-{lower_off_below_target_c:g})"
+        )
+    if use_preimage_cooldown:
+        cutoff_parts.append(
+            f"cool-down: lower off + taper upper at {lower_off_remaining_min:g} min remain, "
+            f"both off at {upper_off_remaining_min:g} min remain"
+        )
+    cutoff_desc = "; ".join(cutoff_parts) if cutoff_parts else "no heater cutoff"
     print(
         f"[Incubation] Heater PWM pins={heater_pins}, duty scale: {scale_desc}, "
         f"freq={int(pwm_freq)}Hz, PID(Kp={kp}, Ki={ki}, Kd={kd}), max_duty={max_duty:.1f}%, "
@@ -342,6 +365,7 @@ def Start_incubation(
     current_duty = 0.0
     lower_cutoff_logged = False
     lower_off_near_target = False
+    cooldown_upper_off_logged = False
     if PID is not None:
         pid = PID(float(kp), float(ki), float(kd), setpoint=target_temp_c)
         pid.output_limits = (0.0, max_duty)
@@ -397,8 +421,6 @@ def Start_incubation(
         while (time.time() - start) < duration_s:
             temp_c = _read_temp_or_hold()
             remaining = max(0.0, duration_s - (time.time() - start))
-            use_lower_cutoff = duration_s > lower_off_remaining_s
-            lower_active_time = remaining > lower_off_remaining_s if use_lower_cutoff else True
             if use_temp_cutoff and (lower_off_near_target or temp_c >= lower_off_threshold_c):
                 if not lower_off_near_target:
                     print(
@@ -410,13 +432,21 @@ def Start_incubation(
                 lower_active_temp = False
             else:
                 lower_active_temp = True
-            lower_active = lower_active_time and lower_active_temp
-            if not lower_active_time and not lower_cutoff_logged:
+            in_cooldown = use_preimage_cooldown and remaining <= lower_off_remaining_s
+            upper_off = use_preimage_cooldown and remaining <= upper_off_remaining_s
+            lower_active = lower_active_temp and not in_cooldown
+            if in_cooldown and not lower_cutoff_logged:
                 print(
-                    f"[Incubation] <= {lower_off_remaining_min:g} min remaining — "
-                    "lower heater OFF, upper only until incubation ends"
+                    f"[Incubation] {lower_off_remaining_min:g} min remaining — "
+                    "lower heater OFF, slowly reducing upper for cool-down"
                 )
                 lower_cutoff_logged = True
+            if upper_off and not cooldown_upper_off_logged:
+                print(
+                    f"[Incubation] {upper_off_remaining_min:g} min remaining — "
+                    "upper heater OFF, dishes cooling before imaging"
+                )
+                cooldown_upper_off_logged = True
 
             if pid is not None:
                 requested_duty = float(pid(temp_c))
@@ -427,6 +457,12 @@ def Start_incubation(
                 prev_error = error
                 raw = (float(kp) * error) + (float(ki) * i_term) + (float(kd) * d_term)
                 requested_duty = max(0.0, min(max_duty, raw))
+
+            if upper_off:
+                requested_duty = 0.0
+            elif in_cooldown:
+                taper = (remaining - upper_off_remaining_s) / cooldown_span_s
+                requested_duty = requested_duty * max(0.0, min(1.0, taper))
 
             current_duty = _set_heaters_duty_smooth(
                 heater_channels,
@@ -445,7 +481,7 @@ def Start_incubation(
             time.sleep(poll_seconds)
     finally:
         global _held_upper_channels
-        if keep_upper_heater_on_exit:
+        if keep_upper_heater_on_exit and not use_preimage_cooldown:
             _stop_heater_channels(heater_channels, pins_to_stop={LOWER_HEATER_PIN})
             upper_ch = next(
                 (ch for ch in heater_channels if ch["pin"] == UPPER_HEATER_PIN), None
