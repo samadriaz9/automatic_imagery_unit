@@ -11,11 +11,11 @@ except Exception:
 
 LOWER_HEATER_PIN = 12  # BCM 12, physical pin 32
 UPPER_HEATER_PIN = 26  # BCM 26, physical pin 37
-UPPER_HEATER_DUTY_BOOST = 1.60  # upper runs 60% hotter than lower (same PID base)
-LOWER_HEATER_OFF_REMAINING_MIN = 4.0  # last N min: lower off, upper only until incubation ends
-# Once sample is this many °C below target, lower stays off (upper finishes ramp / hold).
-# Example: target 37 °C → lower off from 29 °C onward to reduce lid vapour.
-LOWER_HEATER_OFF_BELOW_TARGET_C = 8.0
+UPPER_HEATER_DUTY_BOOST = 1.0  # same PWM duty as lower while both are on
+LOWER_HEATER_OFF_REMAINING_MIN = 5.0  # last 5 min (before pictures): lower off, upper only
+# Once sample is this many °C below target, lower stays off (upper finishes last degree).
+# Example: target 37 °C → both heaters until 36 °C, then upper only to 37 °C.
+LOWER_HEATER_OFF_BELOW_TARGET_C = 1.0
 HEATER_DUTY_SCALE = {
     LOWER_HEATER_PIN: 1.0,
     UPPER_HEATER_PIN: UPPER_HEATER_DUTY_BOOST,
@@ -262,13 +262,11 @@ def Start_incubation(
     """
     Maintain incubation temperature using PID + one or more BTS PWM heater outputs.
 
-    Both heaters use the same DS18B20 reading and PID output. The upper heater
-    (GPIO 26 / pin 37) receives 60% more duty than the lower (GPIO 12 / pin 32).
-
-    Lower heater is switched off (upper only) when either:
-    - temperature reaches ``target - lower_off_below_target_c`` (default 8 °C),
-      then stays off for the rest of this incubation to reduce lid vapour; or
-    - the last ``lower_off_remaining_min`` minutes of the hold.
+    Both heaters use the same DS18B20 reading, PID output, and PWM duty
+    (GPIO 26 upper, GPIO 12 lower) until the sample is 1 °C below target.
+    Then the lower heater stays off and only the upper finishes that last
+    degree and the hold. Lower is also off for the last 5 minutes so the
+    lid stays warmer before pictures.
 
     If ``keep_upper_heater_on_exit`` is True, the upper heater stays on at the
     last PID duty after incubation (for imaging). Call ``release_incubation_heaters()``
@@ -285,9 +283,9 @@ def Start_incubation(
         max_duty: safety cap per heater duty cycle (%).
         ramp_step/ramp_delay: soft-ramp behavior to reduce thermal overshoot.
         poll_seconds: sensor polling interval.
-        lower_off_remaining_min: minutes before end to disable lower heater (default 4).
+        lower_off_remaining_min: minutes before end to disable lower heater (default 5).
         lower_off_below_target_c: turn lower off once temp >= target minus this
-            (default 8). Set 0 or less to disable the temperature cutoff.
+            (default 1 °C, so 36 °C when target is 37 °C). Set 0 or less to disable.
         keep_upper_heater_on_exit: keep upper heater PWM on after incubation ends.
         on_tick: optional callback(elapsed_s, remaining_s, temp_c, target_temp_c).
     """
